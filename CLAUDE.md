@@ -1,4 +1,4 @@
-# PROJECT_NAME
+# job-tailor
 Stack: (set in the interview, e.g. React + Vite, FastAPI, SQLite)
 Run: ...   Test: ...
 
