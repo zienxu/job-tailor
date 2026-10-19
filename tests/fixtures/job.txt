@@ -1,0 +1,3 @@
+We are hiring a Senior Software Engineer to lead backend development, mentor
+junior engineers, and improve deployment reliability. Experience with
+PostgreSQL, CI/CD pipelines, and cross-team collaboration is a plus.

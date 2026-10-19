@@ -1,0 +1,23 @@
+{
+  "contacts": {"name": "Jane Doe", "email": "jane@example.com", "phone": "555-1234"},
+  "roles": [
+    {"id": "role_1", "company": "Acme Corp", "title": "Software Engineer"},
+    {"id": "role_2", "company": "Globex", "title": "Senior Developer"}
+  ],
+  "bullets": [
+    {"id": "bullet_1", "role_id": "role_1", "text": "Led a team of 5 engineers to ship the checkout redesign at Acme Corp."},
+    {"id": "bullet_2", "role_id": "role_1", "text": "Reduced page load time by 40% through caching improvements."},
+    {"id": "bullet_3", "role_id": "role_1", "text": "Designed REST APIs used by 3 million users."},
+    {"id": "bullet_4", "role_id": "role_2", "text": "Mentored 2 junior engineers as a Senior Developer at Globex."},
+    {"id": "bullet_5", "role_id": "role_2", "text": "Migrated the database from MySQL to PostgreSQL with zero downtime."},
+    {"id": "bullet_6", "role_id": "role_2", "text": "Cut deployment time from 30 minutes to 5 minutes."},
+    {"id": "bullet_7", "role_id": "role_1", "text": "Wrote integration tests that caught 12 regressions before release."},
+    {"id": "bullet_8", "role_id": "role_2", "text": "Presented quarterly roadmap updates to 20 stakeholders."},
+    {"id": "bullet_9", "role_id": "role_1", "text": "Automated the release pipeline, saving 10 hours per week."},
+    {"id": "bullet_10", "role_id": "role_2", "text": "Onboarded 4 new hires onto the platform team."}
+  ],
+  "stories": [
+    {"id": "story_1", "role_id": "role_1", "text": "Resolved a critical production outage affecting 10000 users within 30 minutes."},
+    {"id": "story_2", "role_id": "role_2", "text": "Built an internal tool adopted by 50 engineers across the company."}
+  ]
+}

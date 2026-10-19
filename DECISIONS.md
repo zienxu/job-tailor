@@ -51,3 +51,8 @@
 - Chose: Carlito (OFL-licensed), bundled as a web font in the resume template.
 - Rejected: the real Calibri font (Microsoft-proprietary, not freely redistributable); relying on whatever font is installed on the machine running Playwright.
 - Why: Carlito is metric-compatible with Calibri (same character widths/line-wrapping), so the layout-fidelity test against docs/layout-reference.pdf should still hold, and it can be bundled in the repo without a license problem. Resolves the step 3 font/licence blocker.
+
+## 2026-10-19 — Step 1 Groq model and output schema
+- Chose: llama-3.3-70b-versatile; each tailored bullet is `{"text": str, "source_id": str}` (one citation id per bullet).
+- Rejected: llama-3.1-8b-instant (faster but weaker at respecting citation constraints), openai/gpt-oss-120b (slower); `source_ids: [...]` list form (more flexible but adds validation complexity step 1 doesn't need).
+- Why: user picked 70b for reliability over speed; spec's step 1 wording ("cites a bullet or story ID") implies a single id, and the simpler schema is enough for the fail-closed fact-check design.
