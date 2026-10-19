@@ -8,3 +8,4 @@ dist/
 data/raw/
 .claude/settings.local.json
 .DS_Store
+*.egg-info/

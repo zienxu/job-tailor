@@ -66,3 +66,8 @@
 - Chose: same model as step 1; JSON `{unmet_must_haves: [str], weak_bullets: [{text, reason}], missing_keywords: [str], overstated_claims: [{text, reason}]}`; only bullet texts sent (no contacts); bad/mis-shaped response returns empty lists plus `error: "unparseable_response"`.
 - Rejected: free-text critique (can't render per category); silently returning partial results.
 - Why: matches the four categories in the spec and fails closed like the tailorer.
+
+## 2026-10-19 — Step 3 PDF template details
+- Chose: Jinja2 template loaded from a temp file:// page (Chromium blocks file:// CSS/fonts from about:blank); bullets and contact separators drawn as CSS dots; ligatures off; content running past 1 page just fails the test (no auto-trim).
+- Rejected: Arial "●" glyphs like the reference (system-font dependency, and they pollute extracted text); inlining fonts as base64 (more code); pixel-diff fallback (2pt text positions were reachable).
+- Why: no system font dependency and clean ATS text extraction. Overflow behaviour stays an OPEN spec item. Bold phrases inside bullets (as in the reference) need markup in the data; skipped until the editor (step 7) needs it.

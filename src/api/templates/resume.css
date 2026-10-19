@@ -1,0 +1,31 @@
+/* Measurements taken from docs/layout-reference.pdf (US Letter, all in pt). */
+/* Text stops at 568.8 but section rules run to 583, so the page margin is 28.8 and body pads the text.
+   (Anything overflowing the page box makes Chromium shrink the whole page.) */
+@page { size: 612pt 792pt; margin: 0 28.8pt 28.8pt 28.8pt; }
+
+* { margin: 0; padding: 0; }
+body { font: 11pt/15pt "Carlito"; color: #000; padding-right: 14.4pt; }
+/* Ligatures (fi, fl) extract as single glyphs and break ATS keyword matching. */
+body { font-variant-ligatures: none; }
+
+/* The reference centres the header on the page, i.e. over the rule width, not the text column. */
+header { padding-top: 9pt; text-align: center; margin-right: -14.4pt; }
+h1 { font-size: 17pt; line-height: 23pt; }
+.contacts { overflow-wrap: anywhere; }
+
+h2 {
+  font-size: 12pt; line-height: 16.8pt; padding-bottom: 0.45pt;
+  border-bottom: 0.75pt solid #000; margin-right: -14.4pt; margin-bottom: 0;
+}
+
+.row { display: flex; justify-content: space-between; }
+.edu { padding-left: 36pt; position: relative; }
+
+ul { list-style: none; }
+li { padding-left: 36pt; position: relative; }
+
+/* Bullets are drawn, not typed, so they need no extra font and stay out of extracted text. */
+.dot, li::before { display: inline-block; width: 4.2pt; height: 4.2pt; border-radius: 50%; background: #000; }
+li::before { content: ""; position: absolute; left: 19.5pt; top: 5.4pt; }
+.top { position: absolute; left: 1.5pt; top: 5.4pt; }
+.sep { margin: 0 5.4pt 1pt; vertical-align: middle; }

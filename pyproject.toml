@@ -7,6 +7,9 @@ dependencies = [
     "uvicorn",
     "groq",
     "pydantic",
+    "jinja2",
+    "playwright",
+    "pdfplumber",
 ]
 
 [project.optional-dependencies]

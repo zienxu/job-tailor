@@ -1,0 +1,38 @@
+{
+  "name": "[Name]",
+  "contacts": ["[Email]", "[LinkedIn]", "[Phone]", "[Location]"],
+  "education": [
+    {"school": "[University]", "degree": "[Degree]", "date": "[Graduation Date]",
+     "details": ["[GPA / Academic Honors / Relevant Coursework / Exchange Programs]"]}
+  ],
+  "experience": [
+    {"company": "[Company Name]", "title": "[Job Title / Role]", "dates": "[Start Date] - [End Date]",
+     "bullets": ["[Description of responsibilities and achievements with quantifiable metrics]"]},
+    {"company": "[Company Name]", "title": "[Job Title / Role]", "dates": "[Start Date] - [End Date]",
+     "bullets": ["[Description of responsibilities and achievements with quantifiable metrics]",
+                 "[Description of responsibilities and achievements with quantifiable metrics]"]},
+    {"company": "[Company Name]", "title": "[Job Title / Role]", "dates": "[Start Date] - [End Date]",
+     "bullets": ["[Description of responsibilities and achievements with quantifiable metrics]",
+                 "[Description of responsibilities and achievements with quantifiable metrics]",
+                 "[Description of responsibilities and achievements with quantifiable metrics]"]},
+    {"company": "[Company Name]", "title": "[Job Title / Role]", "dates": "[Start Date] - [End Date]",
+     "bullets": ["[Description of responsibilities and achievements with quantifiable metrics]",
+                 "[Description of responsibilities and achievements with quantifiable metrics]"]}
+  ],
+  "leadership": [
+    {"label": "[Organization / Role]:", "text": "[Description of leadership responsibilities, initiatives led, and key achievements]"},
+    {"label": "[Organization / Role]:", "text": "[Description of leadership responsibilities, initiatives led, and key achievements]"}
+  ],
+  "projects": [
+    {"name": "[Project Name]", "role": "[Project Role / Context]", "dates": "[Start Date] - [End Date]",
+     "bullets": ["[Description of project scope, technologies used, and outcomes]"]},
+    {"name": "[Project Name]", "role": "[Project Role / Context]", "dates": "[Start Date] - [End Date]",
+     "bullets": ["[Description of project scope, technologies used, and outcomes]",
+                 "[Description of project scope, technologies used, and outcomes]"]}
+  ],
+  "skills": [
+    {"label": "[Category 1]:", "text": "[Skill 1, Skill 2, Skill 3, Skill 4]"},
+    {"label": "[Category 2]:", "text": "[Skill 1, Skill 2, Skill 3, Skill 4]"},
+    {"label": "[Category 3]:", "text": "[Skill 1, Skill 2, Skill 3, Skill 4]"}
+  ]
+}

@@ -1,6 +1,6 @@
 # job-tailor
-Stack: (set in the interview, e.g. React + Vite, FastAPI, SQLite)
-Run: ...   Test: ...
+Stack: FastAPI, React (Vite), SQLite, Groq, Playwright (PDF), pdfplumber, pytest, Vitest
+Run: (API from step 4)   Test: .venv/bin/pytest  (first time: pip install -e ".[dev]" && playwright install chromium)
 
 Rules
 - Read docs/spec.md first, then docs/research.md. Do ONE numbered step per request, then stop.

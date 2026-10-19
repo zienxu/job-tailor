@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<base href="{{ base }}">
+<link rel="stylesheet" href="fonts/carlito.css">
+<link rel="stylesheet" href="resume.css">
+</head>
+<body>
+<header>
+  <h1>{{ r.name }}</h1>
+  <p class="contacts">{% for c in r.contacts %}{% if not loop.first %}<span class="dot sep"></span>{% endif %}{{ c }}{% endfor %}</p>
+</header>
+
+{% if r.education %}
+<h2>Education</h2>
+{% for e in r.education %}
+<div class="row edu"><span class="dot top"></span><b>{{ e.school }} | {{ e.degree }}</b><span>{{ e.date }}</span></div>
+<ul>{% for d in e.details %}<li>{{ d }}</li>{% endfor %}</ul>
+{% endfor %}
+{% endif %}
+
+{% if r.experience %}
+<h2>Experience</h2>
+{% for x in r.experience %}
+<div class="row"><b>{{ x.company }}</b><span>{{ x.dates }}</span></div>
+<div><i>{{ x.title }}</i></div>
+<ul>{% for b in x.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
+{% endfor %}
+{% endif %}
+
+{% if r.leadership %}
+<h2>Leadership</h2>
+<ul>{% for l in r.leadership %}<li><b>{{ l.label }}</b> {{ l.text }}</li>{% endfor %}</ul>
+{% endif %}
+
+{% if r.projects %}
+<h2>Projects</h2>
+{% for p in r.projects %}
+<div class="row"><b>{{ p.name }}</b><span>{{ p.dates }}</span></div>
+<div><i>{{ p.role }}</i></div>
+<ul>{% for b in p.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
+{% endfor %}
+{% endif %}
+
+{% if r.skills %}
+<h2>Skills</h2>
+<ul>{% for s in r.skills %}<li><b>{{ s.label }}</b> {{ s.text }}</li>{% endfor %}</ul>
+{% endif %}
+</body>
+</html>
