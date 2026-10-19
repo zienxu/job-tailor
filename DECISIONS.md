@@ -56,3 +56,13 @@
 - Chose: llama-3.3-70b-versatile; each tailored bullet is `{"text": str, "source_id": str}` (one citation id per bullet).
 - Rejected: llama-3.1-8b-instant (faster but weaker at respecting citation constraints), openai/gpt-oss-120b (slower); `source_ids: [...]` list form (more flexible but adds validation complexity step 1 doesn't need).
 - Why: user picked 70b for reliability over speed; spec's step 1 wording ("cites a bullet or story ID") implies a single id, and the simpler schema is enough for the fail-closed fact-check design.
+
+## 2026-10-19 — Step 2 ATS score: unweighted coverage, no threshold
+- Chose: score = matched job terms / all job terms (0-100), every term weighted equally; single-token terms, stopwords removed, whole-token match; always labeled "local estimate".
+- Rejected: weighted terms (no basis for weights yet); a pass threshold (spec says never pass/fail); stemming/bigrams (extra code before real data shows a need).
+- Why: simplest score that moves when a keyword is added or removed; real ATS scoring is closed anyway.
+
+## 2026-10-19 — Step 2 critic schema
+- Chose: same model as step 1; JSON `{unmet_must_haves: [str], weak_bullets: [{text, reason}], missing_keywords: [str], overstated_claims: [{text, reason}]}`; only bullet texts sent (no contacts); bad/mis-shaped response returns empty lists plus `error: "unparseable_response"`.
+- Rejected: free-text critique (can't render per category); silently returning partial results.
+- Why: matches the four categories in the spec and fails closed like the tailorer.
