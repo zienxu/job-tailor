@@ -2,11 +2,13 @@
 import json
 import sqlite3
 from typing import Annotated
+from urllib.error import HTTPError
 
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, StringConstraints
 
 from src.api import db
+from src.api.fetch_job import REFUSED, fetch_job
 from src.api.tailor import tailor
 
 app = FastAPI(title="job-tailor")
@@ -101,6 +103,24 @@ def create_job(body: Job, conn=Depends(get_conn)):
     cur = _write(conn, "INSERT INTO jobs (text, company, title, link) VALUES (?, ?, ?, ?)",
                  (body.text, body.company, body.title, body.link))
     return _get(conn, "jobs", cur.lastrowid)
+
+
+class FetchReq(BaseModel):
+    url: NonBlank
+
+
+@app.post("/jobs/fetch")
+def fetch_job_link(body: FetchReq):
+    try:
+        return fetch_job(body.url)
+    except ValueError:
+        raise HTTPException(422, REFUSED)
+    except HTTPError as e:
+        if e.code == 404:
+            raise HTTPException(404, "job not found")
+        raise HTTPException(502, f"fetch failed: HTTP {e.code}")
+    except Exception as e:  # upstream down, 404, bad JSON
+        raise HTTPException(502, f"fetch failed: {type(e).__name__}")
 
 
 @app.get("/jobs/{id}")

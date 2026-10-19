@@ -86,3 +86,8 @@
 - Chose: bullets textarea saved by matching on text (unchanged line keeps its ID, edited line = new bullet, missing line deleted); Vite dev proxy `/api` -> localhost:8000; two tabs via useState; delete buttons, with confirm() before a role delete (cascades its bullets and stories).
 - Rejected: matching by line position (inserting a line would move IDs onto different text); CORS in FastAPI (backend change for no gain); react-router (no URLs needed yet).
 - Why: a citation must point at the exact text it was fact-checked against; smallest wiring with no backend change.
+
+## 2026-10-19 — Step 6 job link fetch
+- Chose: stdlib urllib; POST /jobs/fetch returns {text, title, company, link} without saving (UI then calls POST /jobs); exact-host allowlist (boards/job-boards[.eu].greenhouse.io, jobs[.eu].lever.co), https only, path segments regex-checked before building the API URL; job HTML turned into text with a small regex strip; refusal = 422 "paste the text", upstream failure = 502 (error type only).
+- Rejected: httpx/requests as a runtime dependency (httpx is dev-only); fetch-and-save in one call (nothing should be stored before the user confirms); substring host checks (look-alike hosts); BeautifulSoup (new dependency for a few tags); Greenhouse `?gh_jid=` embeds on company sites and Workday (not official FETCH OK sources).
+- Why: spec allows only the official Greenhouse/Lever APIs, and a server-side fetch must never be steered at another host.
