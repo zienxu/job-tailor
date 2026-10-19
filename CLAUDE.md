@@ -1,6 +1,6 @@
 # job-tailor
 Stack: FastAPI, React (Vite), SQLite, Groq, Playwright (PDF), pdfplumber, pytest, Vitest
-Run: (API from step 4)   Test: .venv/bin/pytest  (first time: pip install -e ".[dev]" && playwright install chromium)
+Run: .venv/bin/uvicorn src.api.main:app --env-file .env   Test: .venv/bin/pytest  (first time: pip install -e ".[dev]" && playwright install chromium)
 
 Rules
 - Read docs/spec.md first, then docs/research.md. Do ONE numbered step per request, then stop.

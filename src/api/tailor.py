@@ -46,8 +46,9 @@ def tailor(job_text: str, profile: dict) -> dict:
     sources = _sources(stripped)
     user_prompt = build_prompt(job_text, stripped)
 
+    # Call failures (network, rate limit, missing key) propagate; only bad responses fail closed.
+    raw = llm.complete(SYSTEM_PROMPT, user_prompt)
     try:
-        raw = llm.complete(SYSTEM_PROMPT, user_prompt)
         parsed = json.loads(raw)
         bullets = parsed["bullets"]
         if not isinstance(bullets, list):

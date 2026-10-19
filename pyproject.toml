@@ -5,6 +5,7 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi",
     "uvicorn",
+    "python-dotenv",
     "groq",
     "pydantic",
     "jinja2",
@@ -13,7 +14,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "httpx"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

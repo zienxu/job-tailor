@@ -71,3 +71,13 @@
 - Chose: Jinja2 template loaded from a temp file:// page (Chromium blocks file:// CSS/fonts from about:blank); bullets and contact separators drawn as CSS dots; ligatures off; content running past 1 page just fails the test (no auto-trim).
 - Rejected: Arial "●" glyphs like the reference (system-font dependency, and they pollute extracted text); inlining fonts as base64 (more code); pixel-diff fallback (2pt text positions were reachable).
 - Why: no system font dependency and clean ATS text extraction. Overflow behaviour stays an OPEN spec item. Bold phrases inside bullets (as in the reference) need markup in the data; skipped until the editor (step 7) needs it.
+
+## 2026-10-19 — Step 4 persistence
+- Chose: stdlib sqlite3 with CREATE TABLE IF NOT EXISTS; AUTOINCREMENT PKs so a deleted ID is never reused by a new row; DB path overridable via JOB_TAILOR_DB; LLM-facing IDs are prefixed PKs (`role_3`, `bullet_7`, `story_2`); a resume version is a JSON blob of the draft; roles get free-text start/end dates.
+- Rejected: SQLAlchemy/migrations (no schema churn yet); storing contacts (deferred until the editor/PDF step needs them, so tailor runs with no contacts); running the critic inside /tailor (critic endpoint comes with the step 7 editor).
+- Why: smallest thing that satisfies step 4; PKs never change, so citation IDs stay stable across edits.
+
+## 2026-10-19 — Step 4 review fixes
+- Chose: `.env` loaded by `uvicorn --env-file` (python-dotenv); default DB path built from the repo root; tailor() lets LLM call errors propagate and /tailor returns 502 (error type only), while unparseable responses still fail closed; blank text rejected with 422.
+- Rejected: load_dotenv() inside main.py (tests importing the app would pull in the real Groq key); a cwd-relative DB path (another start dir silently makes a fresh empty DB); reporting call failures as "unparseable_response" (hides the real cause).
+- Why: the documented run command must work, data must not look lost, and the error must say what actually failed.
