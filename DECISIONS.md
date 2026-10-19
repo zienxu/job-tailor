@@ -81,3 +81,8 @@
 - Chose: `.env` loaded by `uvicorn --env-file` (python-dotenv); default DB path built from the repo root; tailor() lets LLM call errors propagate and /tailor returns 502 (error type only), while unparseable responses still fail closed; blank text rejected with 422.
 - Rejected: load_dotenv() inside main.py (tests importing the app would pull in the real Groq key); a cwd-relative DB path (another start dir silently makes a fresh empty DB); reporting call failures as "unparseable_response" (hides the real cause).
 - Why: the documented run command must work, data must not look lost, and the error must say what actually failed.
+
+## 2026-10-19 — Step 5 Experience/Stories UI
+- Chose: bullets textarea saved by matching on text (unchanged line keeps its ID, edited line = new bullet, missing line deleted); Vite dev proxy `/api` -> localhost:8000; two tabs via useState; delete buttons, with confirm() before a role delete (cascades its bullets and stories).
+- Rejected: matching by line position (inserting a line would move IDs onto different text); CORS in FastAPI (backend change for no gain); react-router (no URLs needed yet).
+- Why: a citation must point at the exact text it was fact-checked against; smallest wiring with no backend change.
