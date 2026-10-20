@@ -18,6 +18,10 @@ const LABELS: Record<api.RoleKind, { heading: string; lede: string; company: str
     heading: 'Education', lede: 'Schools and degrees, copied to the resume as saved. Never sent to the tailor.',
     company: 'School', title: 'Degree', bullets: 'Details (one per line)', add: 'Add education', noun: 'entry',
   },
+  leadership: {
+    heading: 'Leadership', lede: 'Organisations, your positions, and the bullets the tailor is allowed to cite.',
+    company: 'Organisation', title: 'Position', bullets: 'Bullets (one per line)', add: 'Add leadership', noun: 'role',
+  },
 }
 
 export default function Experience({ kind = 'experience' }: { kind?: api.RoleKind }) {
@@ -45,7 +49,10 @@ export default function Experience({ kind = 'experience' }: { kind?: api.RoleKin
   async function save(i: number) {
     const { id, bullets: text, company, title, start_date, end_date } = forms[i]
     const fields = { company, title, start_date, end_date, kind }
-    if (!company.trim() || !title.trim()) return setError(`${L.company} and ${L.title.toLowerCase()} are required`)
+    // Leadership roles migrated from entries have no position, and an empty one just hides the subtitle line.
+    const needTitle = kind !== 'leadership'
+    if (!company.trim() || (needTitle && !title.trim()))
+      return setError(needTitle ? `${L.company} and ${L.title.toLowerCase()} are required` : `${L.company} is required`)
     setSaving(true)
     setError('')
     let ok = false

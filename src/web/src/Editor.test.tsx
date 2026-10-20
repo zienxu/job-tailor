@@ -15,10 +15,10 @@ beforeEach(() => {
     { id: 1, company: 'Acme', title: 'Engineer', start_date: '2020', end_date: '2023', kind: 'experience' as const },
     { id: 2, company: 'Tailor App', title: 'Course Project, NUS', start_date: '2024', end_date: '', kind: 'project' as const },
     { id: 3, company: 'NUS', title: 'BComp', start_date: '', end_date: '2025', kind: 'education' as const },
+    { id: 4, company: 'Chess Club', title: 'President', start_date: '', end_date: '', kind: 'leadership' as const },
   ])
   m.listBullets.mockResolvedValue([{ id: 9, role_id: 3, text: 'GPA 4.5', position: 9 }])
   m.listEntries.mockResolvedValue([
-    { id: 1, section: 'leadership', label: 'Chess Club', text: 'Led 20 members' },
     { id: 2, section: 'skills', label: 'Languages', text: 'Python' },
   ])
   m.latestVersion.mockResolvedValue(null)
@@ -145,11 +145,10 @@ test('copied sections are pre-filled, and unticking an entry removes it from the
   const user = await tailored()
   await waitFor(() => expect(m.preview).toHaveBeenCalled())
   expect(lastPreview().education).toEqual([{ school: 'NUS', degree: 'BComp', date: '2025', details: ['GPA 4.5'] }])
-  expect(lastPreview().leadership).toEqual([{ label: 'Chess Club', text: 'Led 20 members' }])
 
   await user.type(screen.getByLabelText('Languages text'), ', Go')
-  await user.click(screen.getByLabelText('Include Chess Club'))
-  await waitFor(() => expect(lastPreview().leadership).toEqual([]))
+  await user.click(screen.getByLabelText('Include NUS | BComp'))
+  await waitFor(() => expect(lastPreview().education).toEqual([]))
   expect(lastPreview().skills).toEqual([{ label: 'Languages', text: 'Python, Go' }])
   expect(m.updateEntry).not.toHaveBeenCalled()
   expect(m.check.mock.calls.at(-1)![1]).toContain('Python, Go') // ATS sees every included section
@@ -182,4 +181,17 @@ test('a zero-bullet role keeps its header and fallback bullets say "Copied as sa
   expect(within(acme).queryByText('Copied as saved')).toBeNull()
   await waitFor(() => expect(lastPreview().projects).toEqual([
     { name: 'Tailor App', role: 'Course Project, NUS', dates: '2024', bullets: [] }]))
+})
+
+test('leadership bullets sit under their role card and reach the preview as rows', async () => {
+  m.tailor.mockResolvedValue({ bullets: [
+    { text: 'Led 20 members', source_id: 'bullet_7', role_id: 'role_4', flags: [], fallback: true },
+  ] })
+  await tailored()
+  const club = screen.getByRole('heading', { name: 'Chess Club - President' }).parentElement!
+  expect(within(club).getByLabelText('Bullet 1')).toHaveValue('Led 20 members')
+  expect(within(club).getByText('Copied as saved')).toBeInTheDocument()
+  await waitFor(() => expect(lastPreview().leadership).toEqual([
+    { name: 'Chess Club', role: 'President', dates: '', bullets: ['Led 20 members'] }]))
+  expect(m.check.mock.calls.at(-1)![1]).toContain('Led 20 members')
 })

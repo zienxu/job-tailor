@@ -152,3 +152,8 @@
 - Chose: fallback fill lives in `tailor()` (it already has roles and bullets); a role counts as covered if any LLM bullet cites one of its bullets or stories, flagged or not; an unparseable LLM response gets no fallback.
 - Rejected: fallback on unparseable responses (would make a failed call look half-done); doing it in main.py (the role map would be built twice).
 - Why: fail closed stays one clear flag; covered = cited matches the spec's "no cited bullet".
+
+## 2026-10-20 — Step 7c2b leadership as roles
+- Chose: `_migrate_leadership` in `connect()` moves leadership entries to roles in one `BEGIN IMMEDIATE` transaction (new positions = MAX(roles.position)+i, so they land after existing leadership roles with no ties); one template branch renders Projects and Leadership, hiding the italic line when the role is empty; Position is optional on the Leadership page (migrated rows have none); test_pdf compares anchors from the Projects heading down after subtracting the one shift the taller Leadership rows add, and drops the `[Organization / Role]:` anchor; saved versions no longer store `leadership` (its bullets are in `bullets`, like projects).
+- Rejected: keeping the reference's one-line "label: text" Leadership (spec says render like Projects); checking only anchors above Leadership (loses Projects/Skills layout checks); requiring Position (migrated rows couldn't be re-saved); converting old saved versions (spec Open item).
+- Why: user's answers in planning; every leadership path then reuses the existing role code with no special cases.

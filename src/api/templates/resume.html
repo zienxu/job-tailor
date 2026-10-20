@@ -29,14 +29,11 @@
 <div><i>{{ x.title }}</i></div>
 {% if x.bullets %}<ul>{% for b in x.bullets %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
 {% endfor %}
-{% elif s == 'leadership' and r.leadership %}
-<h2>Leadership</h2>
-<ul>{% for l in r.leadership %}<li><b>{{ l.label.rstrip(':') }}:</b> {{ l.text }}</li>{% endfor %}</ul>
-{% elif s == 'projects' and r.projects %}
-<h2>Projects</h2>
-{% for p in r.projects %}
+{% elif s in ('leadership', 'projects') and r[s] %}
+<h2>{{ s.title() }}</h2>
+{% for p in r[s] %}
 <div class="row"><b>{{ p.name }}</b><span>{{ p.dates }}</span></div>
-<div><i>{{ p.role }}</i></div>
+{% if p.role %}<div><i>{{ p.role }}</i></div>{% endif %}
 {% if p.bullets %}<ul>{% for b in p.bullets %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
 {% endfor %}
 {% elif s == 'skills' and r.skills %}

@@ -74,3 +74,18 @@ test('education roles are hidden from the picker unless a story already uses one
   expect(within(fresh).queryByRole('option', { name: 'NUS - BComp' })).not.toBeInTheDocument()
   expect(within(fresh).getByRole('option', { name: 'Acme - Engineer' })).toBeInTheDocument()
 })
+
+test('a story can be linked to a leadership role', async () => {
+  m.listRoles.mockResolvedValue([{ id: 4, company: 'Chess Club', title: '', start_date: '', end_date: '', kind: 'leadership' }])
+  m.listStories.mockResolvedValue([])
+  m.createStory.mockResolvedValue({ id: 6, role_id: 4, text: 'Grew the club' })
+  const user = userEvent.setup()
+  render(<Stories />)
+
+  await user.click(screen.getByText('Add story'))
+  await user.selectOptions(screen.getByLabelText('Role'), await screen.findByText('Chess Club'))
+  await user.type(screen.getByLabelText('Story'), 'Grew the club')
+  await user.click(screen.getByText('Save'))
+
+  await waitFor(() => expect(m.createStory).toHaveBeenCalledWith({ role_id: 4, text: 'Grew the club' }))
+})

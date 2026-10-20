@@ -1,4 +1,4 @@
-export type RoleKind = 'experience' | 'project' | 'education'
+export type RoleKind = 'experience' | 'project' | 'education' | 'leadership'
 export type RoleFields = { company: string; title: string; start_date: string; end_date: string; kind: RoleKind }
 export type Role = RoleFields & { id: number }
 export type ItemFields = { role_id: number; text: string }
@@ -18,18 +18,19 @@ export type Critique = {
 export type SectionKey = 'summary' | 'education' | 'experience' | 'leadership' | 'projects' | 'skills'
 export type LabelText = { label: string; text: string }
 export type Education = { school: string; degree: string; date: string; details: string[] }
+export type Row = { name: string; role: string; dates: string; bullets: string[] }
 export type Resume = {
   name: string; contacts: string[]; summary: string
   education: Education[]
   experience: { company: string; title: string; dates: string; bullets: string[] }[]
-  leadership: LabelText[]
-  projects: { name: string; role: string; dates: string; bullets: string[] }[]
+  leadership: Row[]
+  projects: Row[]
   skills: LabelText[]
   order: SectionKey[]
 }
 export type Draft = {
   name: string; contacts: string[]; summary: string; bullets: DraftBullet[]
-  order?: SectionKey[]; education?: Education[]; leadership?: LabelText[]; skills?: LabelText[]
+  order?: SectionKey[]; education?: Education[]; skills?: LabelText[]
 }
 export type Version = { id: number; job_id: number; content: Draft; created_at: string }
 

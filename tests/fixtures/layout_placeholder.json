@@ -20,8 +20,8 @@
                  "[Description of responsibilities and achievements with quantifiable metrics]"]}
   ],
   "leadership": [
-    {"label": "[Organization / Role]:", "text": "[Description of leadership responsibilities, initiatives led, and key achievements]"},
-    {"label": "[Organization / Role]:", "text": "[Description of leadership responsibilities, initiatives led, and key achievements]"}
+    {"name": "[Organization / Role]", "role": "", "dates": "", "bullets": ["[Description of leadership responsibilities, initiatives led, and key achievements]"]},
+    {"name": "[Organization / Role]", "role": "", "dates": "", "bullets": ["[Description of leadership responsibilities, initiatives led, and key achievements]"]}
   ],
   "projects": [
     {"name": "[Project Name]", "role": "[Project Role / Context]", "dates": "[Start Date] - [End Date]",

@@ -188,3 +188,21 @@ test('add a project with its own labels, saved as kind project', async () => {
   await waitFor(() => expect(m.createBullet).toHaveBeenCalledWith({ role_id: 2, text: 'Built a solver', position: 0 }))
   expect(m.createRole).toHaveBeenCalledWith({ company: 'Chess AI', title: 'Course Project, NUS', start_date: '', end_date: '', kind: 'project' })
 })
+
+test('a leadership role saves with kind leadership and no position', async () => {
+  m.listRoles.mockResolvedValue([])
+  m.listBullets.mockResolvedValue([])
+  m.createRole.mockResolvedValue({ id: 3, company: 'Chess Club', title: '', start_date: '', end_date: '', kind: 'leadership' })
+  m.createBullet.mockResolvedValue({ id: 11, role_id: 3, text: 'Led 20 members', position: 0 })
+  const user = userEvent.setup()
+  render(<Experience kind="leadership" />)
+
+  expect(screen.getByRole('heading', { name: 'Leadership' })).toBeInTheDocument()
+  await user.click(screen.getByText('Add leadership'))
+  await user.type(screen.getByLabelText('Organisation'), 'Chess Club')
+  await user.type(screen.getByLabelText('Bullets (one per line)'), 'Led 20 members')
+  await user.click(screen.getByText('Save'))
+
+  await waitFor(() => expect(m.createBullet).toHaveBeenCalledWith({ role_id: 3, text: 'Led 20 members', position: 0 }))
+  expect(m.createRole).toHaveBeenCalledWith({ company: 'Chess Club', title: '', start_date: '', end_date: '', kind: 'leadership' })
+})

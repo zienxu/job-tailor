@@ -5,8 +5,8 @@ import CriticPanel from '../components/CriticPanel'
 import ScorePanel from '../components/ScorePanel'
 
 type Bullet = api.DraftBullet & { key: number; kept?: boolean }
-// Education, leadership and skills are copied as saved, never sent to the LLM; edits here stay in this draft.
-type Extra = { key: string; section: 'education' | 'leadership' | 'skills'; label: string; sub: string; date: string; text: string; on: boolean }
+// Education and skills are copied as saved, never sent to the LLM; edits here stay in this draft.
+type Extra = { key: string; section: 'education' | 'skills'; label: string; sub: string; date: string; text: string; on: boolean }
 const DEFAULT_ORDER: api.SectionKey[] = ['summary', 'education', 'experience', 'leadership', 'projects', 'skills']
 const SECTION_NAMES: Record<api.SectionKey, string> = {
   summary: 'Summary', education: 'Education', experience: 'Experience', leadership: 'Leadership', projects: 'Projects', skills: 'Skills',
@@ -32,16 +32,16 @@ function toResume(name: string, contacts: string, summary: string, roles: api.Ro
     .filter((r) => r.kind === kind)
     .map((r) => ({ r, bullets: bullets.filter((b) => b.role_id === `role_${r.id}`).map((b) => b.text) }))
   const on = (section: Extra['section']) => extras.filter((e) => e.on && e.section === section)
-  const labelled = (section: Extra['section']) => on(section).map((e) => ({ label: e.label, text: e.text }))
+  const rows = (kind: api.RoleKind) => cited(kind).map(({ r, bullets }) => ({ name: r.company, role: r.title, dates: dates(r), bullets }))
   return {
     name,
     contacts: lines(contacts),
     summary,
     education: on('education').map((e) => ({ school: e.label, degree: e.sub, date: e.date, details: lines(e.text) })),
     experience: cited('experience').map(({ r, bullets }) => ({ company: r.company, title: r.title, dates: dates(r), bullets })),
-    leadership: labelled('leadership'),
-    projects: cited('project').map(({ r, bullets }) => ({ name: r.company, role: r.title, dates: dates(r), bullets })),
-    skills: labelled('skills'),
+    leadership: rows('leadership'),
+    projects: rows('project'),
+    skills: on('skills').map((e) => ({ label: e.label, text: e.text })),
     order,
   }
 }
@@ -51,8 +51,8 @@ const atsText = (r: api.Resume) => [
   r.summary,
   ...r.education.flatMap((e) => [e.school, e.degree, ...e.details]),
   ...r.experience.flatMap((x) => [x.company, x.title, ...x.bullets]),
-  ...r.projects.flatMap((p) => [p.name, p.role, ...p.bullets]),
-  ...[...r.leadership, ...r.skills].flatMap((l) => [l.label, l.text]),
+  ...[...r.projects, ...r.leadership].flatMap((p) => [p.name, p.role, ...p.bullets]),
+  ...r.skills.flatMap((l) => [l.label, l.text]),
 ].join('\n')
 
 export default function Editor() {
@@ -87,7 +87,7 @@ export default function Editor() {
           key: `role_${r.id}`, section: 'education' as const, label: r.company, sub: r.title, date: dates(r), on: true,
           text: bs.filter((b) => b.role_id === r.id).map((b) => b.text).join('\n'),
         })),
-        ...es.map((e) => ({ key: `entry_${e.id}`, section: e.section, label: e.label, sub: '', date: '', text: e.text, on: true })),
+        ...es.filter((e) => e.section === 'skills').map((e) => ({ key: `entry_${e.id}`, section: 'skills' as const, label: e.label, sub: '', date: '', text: e.text, on: true })),
       ])
       if (v) {
         setName(v.content.name ?? '')
@@ -167,7 +167,7 @@ export default function Editor() {
     try {
       await api.saveVersion(jobId, {
         name, contacts: lines(contacts), summary, bullets: bullets.map(({ key, kept, ...b }) => b),
-        order, education: resume.education, leadership: resume.leadership, skills: resume.skills,
+        order, education: resume.education, skills: resume.skills,
       })
       const url = URL.createObjectURL(await api.pdf(resume))
       const a = document.createElement('a')
@@ -196,7 +196,7 @@ export default function Editor() {
   const canDownload = jobId !== null && unresolved === 0 && reviewed && !checking && !busy
 
   const groups = [
-    ...roles.filter((r) => r.kind !== 'education').map((r) => ({ id: `role_${r.id}`, title: `${r.company} - ${r.title}`, dates: dates(r), cited: true })),
+    ...roles.filter((r) => r.kind !== 'education').map((r) => ({ id: `role_${r.id}`, title: [r.company, r.title].filter(Boolean).join(' - '), dates: dates(r), cited: true })),
     { id: null, title: 'Uncited (left out of the PDF)', dates: '', cited: false },
   ].map((g) => ({ ...g, items: bullets.filter((b) => b.role_id === g.id) }))
     // Every role keeps its card (a zero-bullet role shows its header only); uncited only when it has bullets.
@@ -282,7 +282,7 @@ export default function Editor() {
               ))}
             </ol>
           </div>
-          {(['education', 'leadership', 'skills'] as const).map((sec) => {
+          {(['education', 'skills'] as const).map((sec) => {
             const items = extras.filter((e) => e.section === sec)
             return items.length > 0 && (
               <div key={sec} className="record">

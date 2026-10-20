@@ -62,7 +62,26 @@ def connect() -> sqlite3.Connection:
         conn.commit()
         conn.execute(f"CREATE TRIGGER IF NOT EXISTS {t}_position AFTER INSERT ON {t} WHEN NEW.position IS NULL"
                      f" BEGIN UPDATE {t} SET position = NEW.id WHERE id = NEW.id; END")
+    _migrate_leadership(conn)
     return conn
+
+
+def _migrate_leadership(conn: sqlite3.Connection) -> None:
+    """Before step 7c2b leadership was label/text entries; each becomes a leadership role whose one bullet is the text.
+    One transaction, taken before reading, so a crash or a second connection can't half-move or double-move a row."""
+    # connect() runs per request: only take the write lock when there is something to move.
+    if not conn.execute("SELECT 1 FROM entries WHERE section = 'leadership' LIMIT 1").fetchone():
+        return
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute("SELECT * FROM entries WHERE section = 'leadership' ORDER BY position, id").fetchall()
+        # MAX over all roles puts them after existing leadership roles with no position ties.
+        base = conn.execute("SELECT COALESCE(MAX(position), 0) FROM roles").fetchone()[0]
+        for i, e in enumerate(rows, 1):
+            role_id = conn.execute("INSERT INTO roles (company, title, kind, position) VALUES (?, '', 'leadership', ?)",
+                                   (e["label"].rstrip(":"), base + i)).lastrowid  # the old template added the ":"
+            conn.execute("INSERT INTO bullets (role_id, text) VALUES (?, ?)", (role_id, e["text"]))
+            conn.execute("DELETE FROM entries WHERE id = ?", (e["id"],))
 
 
 def load_profile(conn: sqlite3.Connection) -> dict:

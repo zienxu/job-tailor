@@ -10,7 +10,6 @@ const m = vi.mocked(api)
 beforeEach(() => vi.resetAllMocks())
 
 test.each([
-  ['leadership', 'Add leadership', 'President, Chess Club', 'Ran weekly sessions'],
   ['skills', 'Add skill group', 'Languages', 'Python, TypeScript'],
 ] as const)('add a %s entry and save', async (section, add, label, text) => {
   m.listEntries.mockResolvedValue([])

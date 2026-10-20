@@ -110,10 +110,12 @@ def test_entries_crud_round_trip(client):
     e = client.post("/entries", json={"section": "skills", "label": "Languages", "text": "Python"})
     assert e.status_code == 201
     eid = e.json()["id"]
-    client.post("/entries", json={"section": "leadership", "label": "President", "text": "Ran the club"})
+    client.post("/entries", json={"section": "skills", "label": "Tools", "text": "Git"})
     client.put(f"/entries/{eid}", json={"section": "skills", "label": "Languages", "text": "Python, Go"})
-    assert [(x["section"], x["text"]) for x in client.get("/entries").json()] == [
-        ("skills", "Python, Go"), ("leadership", "Ran the club")]
+    assert [(x["label"], x["text"]) for x in client.get("/entries").json()] == [
+        ("Languages", "Python, Go"), ("Tools", "Git")]
+    # Leadership lives in roles since step 7c2b.
+    assert client.post("/entries", json={"section": "leadership", "label": "P", "text": "x"}).status_code == 422
     assert client.post("/entries", json={"section": "hobbies", "label": "a", "text": "b"}).status_code == 422
     assert client.post("/entries", json={"section": "skills", "label": " ", "text": "b"}).status_code == 422
     assert client.delete(f"/entries/{eid}").status_code == 204
@@ -158,7 +160,6 @@ def test_swap_changes_order(client, table, body):
 
 @pytest.mark.parametrize("table,x,y", [
     ("roles", {"company": "Acme", "title": "SWE"}, {"company": "NUS", "title": "BComp", "kind": "education"}),
-    ("entries", {"section": "skills", "label": "L", "text": "x"}, {"section": "leadership", "label": "P", "text": "y"}),
 ])
 def test_swap_across_groups_rejected(client, table, x, y):
     a, b = (client.post(f"/{table}", json=body).json() for body in (x, y))
@@ -197,3 +198,33 @@ def test_old_db_without_position_migrates(client):
         assert all(r["position"] == r["id"] for r in client.get(f"/{table}").json())
     new = client.post("/roles", json={"company": "Gamma", "title": "SWE"}).json()
     assert new["position"] == new["id"] == 3
+
+
+def test_old_leadership_entries_migrate_to_roles(client):
+    with closing(db.connect()) as conn:  # an old DB: rows written before connect() learned to move them
+        conn.execute("INSERT INTO roles (company, title, kind) VALUES ('Old Club', 'Chair', 'leadership')")
+        conn.executemany("INSERT INTO entries (section, label, text, position) VALUES (?, ?, ?, ?)", [
+            ("leadership", "Debate", "Won 3 cups", 20), ("skills", "Languages", "Python", 5),
+            ("leadership", "Chess Club:", "Led 20 members", 10)])
+        conn.commit()
+    roles = [r for r in client.get("/roles").json() if r["kind"] == "leadership"]
+    assert [(r["company"], r["title"]) for r in roles] == [("Old Club", "Chair"), ("Chess Club", ""), ("Debate", "")]
+    by_role = {b["role_id"]: b["text"] for b in client.get("/bullets").json()}
+    assert [by_role.get(r["id"]) for r in roles[1:]] == ["Led 20 members", "Won 3 cups"]
+    assert [e["section"] for e in client.get("/entries").json()] == ["skills"]
+
+    snapshot = [client.get(f"/{t}").json() for t in ("roles", "bullets", "entries")]
+    with closing(db.connect()):  # second run is a no-op
+        pass
+    assert [client.get(f"/{t}").json() for t in ("roles", "bullets", "entries")] == snapshot
+
+
+def test_load_profile_includes_leadership_excludes_education(client):
+    ids = {k: client.post("/roles", json={"company": k, "title": "", "kind": k}).json()["id"]
+           for k in ("leadership", "education")}
+    for rid in ids.values():
+        client.post("/bullets", json={"role_id": rid, "text": "x"})
+    with closing(db.connect()) as conn:
+        profile = db.load_profile(conn)
+    assert [r["id"] for r in profile["roles"]] == [f"role_{ids['leadership']}"]
+    assert [b["role_id"] for b in profile["bullets"]] == [f"role_{ids['leadership']}"]

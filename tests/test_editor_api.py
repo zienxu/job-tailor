@@ -103,11 +103,14 @@ def test_preview_renders_all_sections_in_order(client):
               "projects": [{"name": "Tailor", "role": "Course Project, NUS", "dates": "2024", "bullets": ["Built it."]}],
               "experience": [{"company": "Acme", "title": "Engineer", "bullets": ["Shipped X."]}],
               "education": [{"school": "NUS", "degree": "BComp", "date": "2025", "details": ["GPA 4.5"]}],
-              "leadership": [{"label": "Club:", "text": "Led it."}]}
+              "leadership": [{"name": "Chess Club", "role": "", "dates": "2023", "bullets": ["Led it."]}]}
     html = client.post("/preview", json={"resume": resume}).text
     pos = [html.index(f"<h2>{h}</h2>") for h in ("Skills", "Projects", "Experience", "Education", "Leadership", "Summary")]
     assert pos == sorted(pos)
-    assert "<b>Languages:</b> Python" in html and "<b>Club:</b> Led it." in html
+    assert "<b>Languages:</b> Python" in html and "<b>Chess Club</b>" in html and "<li>Led it.</li>" in html
+    # An empty role hides the italic subtitle line.
+    leadership = html.split("<h2>Leadership</h2>", 1)[1].split("<h2>", 1)[0]
+    assert "<i>" not in leadership
     assert "<i>Course Project, NUS</i>" in html and "GPA 4.5" in html
     assert client.post("/preview", json={"resume": {"order": ["footer"]}}).status_code == 422
 
@@ -127,3 +130,17 @@ def test_zero_bullet_role_renders_header_only(client):
     html = client.post("/preview", json={"resume": {"experience": [
         {"company": "Acme Corp", "title": "Engineer", "dates": "2020", "bullets": []}]}}).text
     assert "Engineer" in html and "<li>" not in html.split("Acme Corp", 1)[1]
+
+
+def test_uncited_leadership_role_gets_fallback_bullets(seeded):
+    client, job_id, _, bullet_id = seeded
+    lead = client.post("/roles", json={"company": "Chess Club", "title": "", "kind": "leadership"}).json()["id"]
+    for t in ("Led 20 members.", "Ran weekly sessions.", "Booked venues."):
+        client.post("/bullets", json={"role_id": lead, "text": t})
+    reply = json.dumps({"bullets": [{"text": "Cut build time by 40% with caching.", "source_id": bullet_id}]})
+    with patch("src.api.tailor.llm.complete", return_value=reply) as mock:
+        out = client.post(f"/jobs/{job_id}/tailor").json()
+    assert "Chess Club" in mock.call_args.args[1]
+    fallback = [b for b in out["bullets"] if b["fallback"]]
+    assert [b["text"] for b in fallback] == ["Led 20 members.", "Ran weekly sessions."]
+    assert all(b["flags"] == [] and b["role_id"] == f"role_{lead}" for b in fallback)

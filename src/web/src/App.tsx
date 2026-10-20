@@ -86,8 +86,8 @@ export default function App() {
       <main className="min-w-0 flex-1 px-5 py-8 sm:px-10 sm:py-12">
         {page === 'stories' ? <Stories />
           : page === 'editor' ? <Editor />
-          : page === 'leadership' || page === 'skills' ? <Entries key={page} section={page} />
-          : page === 'project' || page === 'education' ? <Experience key={page} kind={page} />
+          : page === 'skills' ? <Entries section={page} />
+          : page === 'project' || page === 'education' || page === 'leadership' ? <Experience key={page} kind={page} />
           : <Experience />}
       </main>
     </div>

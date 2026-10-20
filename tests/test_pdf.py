@@ -16,7 +16,23 @@ TOL = 2  # pt
 # Anchors whose every occurrence must sit where the reference puts it.
 ANCHORS = ["[Name]", "[Email]", "[Location]", "Education", "Experience", "Leadership", "Projects", "Skills",
            "[University]", "[Graduation Date]", "[Company Name]", "[End Date]", "[Job Title / Role]",
-           "[Project Name]", "[Organization / Role]:", "[Category 1]:", "[Category 3]:"]
+           "[Project Name]", "[Category 1]:", "[Category 3]:"]
+
+
+def _shift(ref, got):
+    """Leadership renders as rows (step 7c2b), taller than the reference's one-line bullets, so everything from
+    the Projects heading down moves by one amount. Returns (reference top of Projects, that amount)."""
+    r, g = (p.search("Projects", regex=False)[0]["top"] for p in (ref, got))
+    # Each of the fixture's 2 leadership rows adds exactly one 15pt line (the name row).
+    assert g - r == pytest.approx(2 * 15, abs=TOL)
+    return r, g - r
+
+
+def test_leadership_rows_align_like_projects(pages):
+    _, got = pages
+    lead, proj = (got[0].search(s, regex=False) for s in ("[Organization / Role]", "[Project Name]"))
+    assert len(lead) == 2
+    assert all(l["x0"] == pytest.approx(proj[0]["x0"], abs=TOL) for l in lead)
 
 
 @pytest.fixture(scope="module")
@@ -45,7 +61,9 @@ def test_margins_match(pages):
     ref, got = pages
     # Reference bullets are Arial glyphs; ours are drawn, so compare text only.
     no_bullets = lambda c: c.get("text") != "●"
-    for r, g in zip(_ink_bbox(ref[0].filter(no_bullets)), _ink_bbox(got[0])):
+    x0, top, x1, bottom = _ink_bbox(got[0])
+    got_box = (x0, top, x1, bottom - _shift(ref[0], got[0])[1])
+    for r, g in zip(_ink_bbox(ref[0].filter(no_bullets)), got_box):
         assert g == pytest.approx(r, abs=TOL)
 
 
@@ -55,8 +73,10 @@ def test_anchor_positions_match(pages, anchor):
     want = ref[0].search(anchor, regex=False)
     have = got[0].search(anchor, regex=False)
     assert len(have) == len(want) > 0
+    start, d = _shift(ref[0], got[0])
     for w, h in zip(want, have):
-        assert (h["x0"], h["top"], h["x1"]) == pytest.approx((w["x0"], w["top"], w["x1"]), abs=TOL)
+        top = h["top"] - (d if w["top"] >= start else 0)
+        assert (h["x0"], top, h["x1"]) == pytest.approx((w["x0"], w["top"], w["x1"]), abs=TOL)
 
 
 def test_extracted_text_complete_and_in_order(pages):
@@ -71,7 +91,7 @@ def test_extracted_text_complete_and_in_order(pages):
         expected += [x["company"], x["dates"], x["title"], *x["bullets"]]
     expected.append("Leadership")
     for l in RESUME["leadership"]:
-        expected += [l["label"], l["text"]]
+        expected += [l["name"], *l["bullets"]]
     expected.append("Projects")
     for p in RESUME["projects"]:
         expected += [p["name"], p["dates"], p["role"], *p["bullets"]]

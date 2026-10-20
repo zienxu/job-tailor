@@ -43,7 +43,7 @@ class Role(BaseModel):
     title: str
     start_date: str = ""
     end_date: str = ""
-    kind: Literal["experience", "project", "education"] = "experience"
+    kind: Literal["experience", "project", "education", "leadership"] = "experience"
 
 
 class Item(BaseModel):
@@ -56,7 +56,7 @@ class Bullet(Item):
 
 
 class Entry(BaseModel):
-    section: Literal["leadership", "skills"]
+    section: Literal["skills"]  # leadership moved to roles in step 7c2b
     label: NonBlank
     text: NonBlank
 
@@ -250,7 +250,7 @@ class Resume(BaseModel):
     summary: str = ""
     education: list[EducationEntry] = []
     experience: list[ExperienceEntry] = []
-    leadership: list[LabelEntry] = []
+    leadership: list[ProjectEntry] = []
     projects: list[ProjectEntry] = []
     skills: list[LabelEntry] = []
     order: list[Literal["summary", "education", "experience", "leadership", "projects", "skills"]] = pdf.ORDER
