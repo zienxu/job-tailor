@@ -203,11 +203,35 @@ class ExperienceEntry(BaseModel):
     bullets: list[str]
 
 
+class ProjectEntry(BaseModel):
+    name: str
+    role: str
+    dates: str = ""
+    bullets: list[str]
+
+
+class EducationEntry(BaseModel):
+    school: str
+    degree: str
+    date: str = ""
+    details: list[str] = []
+
+
+class LabelEntry(BaseModel):
+    label: str
+    text: str
+
+
 class Resume(BaseModel):
     name: str = ""
     contacts: list[str] = []
     summary: str = ""
+    education: list[EducationEntry] = []
     experience: list[ExperienceEntry] = []
+    leadership: list[LabelEntry] = []
+    projects: list[ProjectEntry] = []
+    skills: list[LabelEntry] = []
+    order: list[Literal["summary", "education", "experience", "leadership", "projects", "skills"]] = pdf.ORDER
 
 
 class Render(BaseModel):

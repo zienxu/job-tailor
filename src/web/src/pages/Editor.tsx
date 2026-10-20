@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { Download, Maximize2, Sparkles, TriangleAlert, Unlink, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Download, Maximize2, Sparkles, TriangleAlert, Unlink, X } from 'lucide-react'
 import * as api from '../api'
 import CriticPanel from '../components/CriticPanel'
 import ScorePanel from '../components/ScorePanel'
 
 type Bullet = api.DraftBullet & { key: number; kept?: boolean }
+// Education, leadership and skills are copied as saved, never sent to the LLM; edits here stay in this draft.
+type Extra = { key: string; section: 'education' | 'leadership' | 'skills'; label: string; sub: string; date: string; text: string; on: boolean }
+const DEFAULT_ORDER: api.SectionKey[] = ['summary', 'education', 'experience', 'leadership', 'projects', 'skills']
+const SECTION_NAMES: Record<api.SectionKey, string> = {
+  summary: 'Summary', education: 'Education', experience: 'Experience', leadership: 'Leadership', projects: 'Projects', skills: 'Skills',
+}
 let nextKey = 0
 const PAGE_W = 816 // US Letter at 96dpi
 const PAGE_H = 1056
@@ -18,21 +24,37 @@ const CHIPS = {
 
 const lines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean)
 
-function toResume(name: string, contacts: string, summary: string, roles: api.Role[], bullets: Bullet[]): api.Resume {
+const dates = (r: api.Role) => [r.start_date, r.end_date].filter(Boolean).join(' - ')
+
+function toResume(name: string, contacts: string, summary: string, roles: api.Role[], bullets: Bullet[],
+  extras: Extra[], order: api.SectionKey[]): api.Resume {
+  const cited = (kind: api.RoleKind) => roles
+    .filter((r) => r.kind === kind)
+    .map((r) => ({ r, bullets: bullets.filter((b) => b.role_id === `role_${r.id}`).map((b) => b.text) }))
+    .filter((x) => x.bullets.length > 0)
+  const on = (section: Extra['section']) => extras.filter((e) => e.on && e.section === section)
+  const labelled = (section: Extra['section']) => on(section).map((e) => ({ label: e.label, text: e.text }))
   return {
     name,
     contacts: lines(contacts),
     summary,
-    experience: roles
-      .map((r) => ({
-        company: r.company,
-        title: r.title,
-        dates: [r.start_date, r.end_date].filter(Boolean).join(' - '),
-        bullets: bullets.filter((b) => b.role_id === `role_${r.id}`).map((b) => b.text),
-      }))
-      .filter((x) => x.bullets.length > 0),
+    education: on('education').map((e) => ({ school: e.label, degree: e.sub, date: e.date, details: lines(e.text) })),
+    experience: cited('experience').map(({ r, bullets }) => ({ company: r.company, title: r.title, dates: dates(r), bullets })),
+    leadership: labelled('leadership'),
+    projects: cited('project').map(({ r, bullets }) => ({ name: r.company, role: r.title, dates: dates(r), bullets })),
+    skills: labelled('skills'),
+    order,
   }
 }
+
+// Everything that reaches the page counts for the ATS estimate.
+const atsText = (r: api.Resume) => [
+  r.summary,
+  ...r.education.flatMap((e) => [e.school, e.degree, ...e.details]),
+  ...r.experience.flatMap((x) => [x.company, x.title, ...x.bullets]),
+  ...r.projects.flatMap((p) => [p.name, p.role, ...p.bullets]),
+  ...[...r.leadership, ...r.skills].flatMap((l) => [l.label, l.text]),
+].join('\n')
 
 export default function Editor() {
   const [roles, setRoles] = useState<api.Role[]>([])
@@ -42,6 +64,8 @@ export default function Editor() {
   const [contacts, setContacts] = useState('')
   const [summary, setSummary] = useState('')
   const [bullets, setBullets] = useState<Bullet[]>([])
+  const [extras, setExtras] = useState<Extra[]>([])
+  const [order, setOrder] = useState<api.SectionKey[]>(DEFAULT_ORDER)
   const [ats, setAts] = useState<api.Ats | null>(null)
   const [critic, setCritic] = useState<api.Critique | null>(null)
   const [criticLoading, setCriticLoading] = useState(false)
@@ -57,16 +81,24 @@ export default function Editor() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    Promise.all([api.listRoles(), api.latestVersion()]).then(([rs, v]) => {
+    Promise.all([api.listRoles(), api.listBullets(), api.listEntries(), api.latestVersion()]).then(([rs, bs, es, v]) => {
       setRoles(rs)
+      setExtras([
+        ...rs.filter((r) => r.kind === 'education').map((r) => ({
+          key: `role_${r.id}`, section: 'education' as const, label: r.company, sub: r.title, date: dates(r), on: true,
+          text: bs.filter((b) => b.role_id === r.id).map((b) => b.text).join('\n'),
+        })),
+        ...es.map((e) => ({ key: `entry_${e.id}`, section: e.section, label: e.label, sub: '', date: '', text: e.text, on: true })),
+      ])
       if (v) {
         setName(v.content.name ?? '')
         setContacts((v.content.contacts ?? []).join('\n'))
+        if (v.content.order) setOrder(v.content.order)
       }
     }).catch((e) => setError(e.message))
   }, [])
 
-  const resume = toResume(name, contacts, summary, roles, bullets)
+  const resume = toResume(name, contacts, summary, roles, bullets, extras, order)
   // Flags and "kept" are left out, so a re-check result doesn't trigger another re-check.
   const draftKey = JSON.stringify([resume, bullets.map((b) => [b.text, b.source_id])])
 
@@ -77,8 +109,7 @@ export default function Editor() {
     let stale = false
     setChecking(true)
     const t = setTimeout(() => {
-      const text = [resume.summary, ...resume.experience.flatMap((x) => [x.company, x.title, ...x.bullets])].join('\n')
-      api.check(jobId, text, bullets).then((r) => {
+      api.check(jobId, atsText(resume), bullets).then((r) => {
         if (stale) return
         setAts(r.ats)
         setChecking(false)
@@ -135,7 +166,10 @@ export default function Editor() {
     setBusy(true)
     setError('')
     try {
-      await api.saveVersion(jobId, { name, contacts: lines(contacts), summary, bullets: bullets.map(({ key, kept, ...b }) => b) })
+      await api.saveVersion(jobId, {
+        name, contacts: lines(contacts), summary, bullets: bullets.map(({ key, kept, ...b }) => b),
+        order, education: resume.education, leadership: resume.leadership, skills: resume.skills,
+      })
       const url = URL.createObjectURL(await api.pdf(resume))
       const a = document.createElement('a')
       a.href = url
@@ -151,12 +185,19 @@ export default function Editor() {
   const editBullet = (key: number, patch: Partial<Bullet>) =>
     setBullets((bs) => bs.map((b) => (b.key === key ? { ...b, ...patch } : b)))
   const removeBullet = (key: number) => setBullets((bs) => bs.filter((b) => b.key !== key))
+  const editExtra = (key: string, patch: Partial<Extra>) =>
+    setExtras((es) => es.map((e) => (e.key === key ? { ...e, ...patch } : e)))
+  const move = (i: number, by: number) => setOrder((o) => {
+    const next = [...o]
+    ;[next[i], next[i + by]] = [next[i + by], next[i]]
+    return next
+  })
 
   const unresolved = bullets.filter((b) => b.flags.length > 0 && !b.kept).length
   const canDownload = jobId !== null && unresolved === 0 && reviewed && !checking && !busy
 
   const groups = [
-    ...roles.map((r) => ({ id: `role_${r.id}`, title: `${r.company} - ${r.title}`, cited: true })),
+    ...roles.filter((r) => r.kind !== 'education').map((r) => ({ id: `role_${r.id}`, title: `${r.company} - ${r.title}`, cited: true })),
     { id: null, title: 'Uncited (left out of the PDF)', cited: false },
   ].map((g) => ({ ...g, items: bullets.filter((b) => b.role_id === g.id) })).filter((g) => g.items.length > 0)
 
@@ -224,6 +265,49 @@ export default function Editor() {
             <label className="label">Contacts (one per line)<textarea className="field" rows={3} value={contacts} onChange={(e) => setContacts(e.target.value)} /></label>
             <label className="label">Summary<textarea className="field font-serif leading-relaxed" rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} /></label>
           </div>
+          <div className="record">
+            <h2 className="font-serif text-lg font-semibold">Section order</h2>
+            <ol className="mt-3 flex flex-col gap-1">
+              {order.map((k, i) => (
+                <li key={k} className="flex items-center gap-2">
+                  <span className="flex-1">{SECTION_NAMES[k]}</span>
+                  <button type="button" className="btn btn-quiet px-2" aria-label={`Move ${SECTION_NAMES[k]} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+                    <ArrowUp aria-hidden size={16} />
+                  </button>
+                  <button type="button" className="btn btn-quiet px-2" aria-label={`Move ${SECTION_NAMES[k]} down`} disabled={i === order.length - 1} onClick={() => move(i, 1)}>
+                    <ArrowDown aria-hidden size={16} />
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </div>
+          {(['education', 'leadership', 'skills'] as const).map((sec) => {
+            const items = extras.filter((e) => e.section === sec)
+            return items.length > 0 && (
+              <div key={sec} className="record">
+                <h2 className="font-serif text-lg font-semibold">{SECTION_NAMES[sec]}</h2>
+                <p className="text-sm text-muted">Copied as saved. Edits here apply to this draft only.</p>
+                <ul className="mt-3 flex flex-col gap-4">
+                  {items.map((e) => (
+                    <li key={e.key} className="flex flex-col gap-2">
+                      <label className="inline-flex items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" checked={e.on} onChange={(ev) => editExtra(e.key, { on: ev.target.checked })} />
+                        Include {e.label}{e.sub && ` | ${e.sub}`}
+                      </label>
+                      <textarea
+                        aria-label={sec === 'education' ? `${e.label} details` : `${e.label} text`}
+                        className="field font-serif leading-relaxed"
+                        rows={2}
+                        disabled={!e.on}
+                        value={e.text}
+                        onChange={(ev) => editExtra(e.key, { text: ev.target.value })}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )
+          })}
           {groups.map((g) => (
             <div key={g.id ?? 'uncited'} className="record">
               <h2 className="font-serif text-lg font-semibold">{g.title}</h2>

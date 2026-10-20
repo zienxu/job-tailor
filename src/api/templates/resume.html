@@ -12,45 +12,37 @@
   <p class="contacts">{% for c in r.contacts %}{% if not loop.first %}<span class="dot sep"></span>{% endif %}{{ c }}{% endfor %}</p>
 </header>
 
-{% if r.summary %}
+{% for s in order %}
+{% if s == 'summary' and r.summary %}
 <h2>Summary</h2>
 <p>{{ r.summary }}</p>
-{% endif %}
-
-{% if r.education %}
+{% elif s == 'education' and r.education %}
 <h2>Education</h2>
 {% for e in r.education %}
 <div class="row edu"><span class="dot top"></span><b>{{ e.school }} | {{ e.degree }}</b><span>{{ e.date }}</span></div>
 <ul>{% for d in e.details %}<li>{{ d }}</li>{% endfor %}</ul>
 {% endfor %}
-{% endif %}
-
-{% if r.experience %}
+{% elif s == 'experience' and r.experience %}
 <h2>Experience</h2>
 {% for x in r.experience %}
 <div class="row"><b>{{ x.company }}</b><span>{{ x.dates }}</span></div>
 <div><i>{{ x.title }}</i></div>
 <ul>{% for b in x.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
 {% endfor %}
-{% endif %}
-
-{% if r.leadership %}
+{% elif s == 'leadership' and r.leadership %}
 <h2>Leadership</h2>
-<ul>{% for l in r.leadership %}<li><b>{{ l.label }}</b> {{ l.text }}</li>{% endfor %}</ul>
-{% endif %}
-
-{% if r.projects %}
+<ul>{% for l in r.leadership %}<li><b>{{ l.label.rstrip(':') }}:</b> {{ l.text }}</li>{% endfor %}</ul>
+{% elif s == 'projects' and r.projects %}
 <h2>Projects</h2>
 {% for p in r.projects %}
 <div class="row"><b>{{ p.name }}</b><span>{{ p.dates }}</span></div>
 <div><i>{{ p.role }}</i></div>
 <ul>{% for b in p.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
 {% endfor %}
-{% endif %}
-
-{% if r.skills %}
+{% elif s == 'skills' and r.skills %}
 <h2>Skills</h2>
-<ul>{% for s in r.skills %}<li><b>{{ s.label }}</b> {{ s.text }}</li>{% endfor %}</ul>
+<ul>{% for k in r.skills %}<li><b>{{ k.label.rstrip(':') }}:</b> {{ k.text }}</li>{% endfor %}</ul>
 {% endif %}
+{% endfor %}
 </body>
 </html>

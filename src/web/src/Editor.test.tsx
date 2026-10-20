@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, test, vi } from 'vitest'
 import * as api from './api'
@@ -11,7 +11,16 @@ const emptyCritique = { unmet_must_haves: [], weak_bullets: [], missing_keywords
 
 beforeEach(() => {
   vi.resetAllMocks()
-  m.listRoles.mockResolvedValue([{ id: 1, company: 'Acme', title: 'Engineer', start_date: '2020', end_date: '2023', kind: 'experience' as const }])
+  m.listRoles.mockResolvedValue([
+    { id: 1, company: 'Acme', title: 'Engineer', start_date: '2020', end_date: '2023', kind: 'experience' as const },
+    { id: 2, company: 'Tailor App', title: 'Course Project, NUS', start_date: '2024', end_date: '', kind: 'project' as const },
+    { id: 3, company: 'NUS', title: 'BComp', start_date: '', end_date: '2025', kind: 'education' as const },
+  ])
+  m.listBullets.mockResolvedValue([{ id: 9, role_id: 3, text: 'GPA 4.5' }])
+  m.listEntries.mockResolvedValue([
+    { id: 1, section: 'leadership', label: 'Chess Club', text: 'Led 20 members' },
+    { id: 2, section: 'skills', label: 'Languages', text: 'Python' },
+  ])
   m.latestVersion.mockResolvedValue(null)
   m.createJob.mockResolvedValue({ id: 5, text: 'job', company: '', title: '', link: '' })
   m.tailor.mockResolvedValue({ bullets: [
@@ -119,4 +128,41 @@ test('Open full size shows the preview in a dialog', async () => {
   await user.click(await screen.findByRole('button', { name: /Open full size/ }))
   expect(screen.getByRole('dialog', { name: 'Full size preview' })).toBeVisible()
   expect(screen.getByTitle('Resume preview, full size')).toHaveAttribute('width', '816')
+})
+
+const lastPreview = () => m.preview.mock.calls.at(-1)![0]
+
+test('moving a section changes the order in the preview request', async () => {
+  const user = await tailored()
+  await waitFor(() => expect(m.preview).toHaveBeenCalled())
+  expect(lastPreview().order).toEqual(['summary', 'education', 'experience', 'leadership', 'projects', 'skills'])
+  await user.click(screen.getByLabelText('Move Projects up'))
+  await waitFor(() => expect(lastPreview().order).toEqual(['summary', 'education', 'experience', 'projects', 'leadership', 'skills']))
+  expect(screen.getByLabelText('Move Summary up')).toBeDisabled()
+})
+
+test('copied sections are pre-filled, and unticking an entry removes it from the resume', async () => {
+  const user = await tailored()
+  await waitFor(() => expect(m.preview).toHaveBeenCalled())
+  expect(lastPreview().education).toEqual([{ school: 'NUS', degree: 'BComp', date: '2025', details: ['GPA 4.5'] }])
+  expect(lastPreview().leadership).toEqual([{ label: 'Chess Club', text: 'Led 20 members' }])
+
+  await user.type(screen.getByLabelText('Languages text'), ', Go')
+  await user.click(screen.getByLabelText('Include Chess Club'))
+  await waitFor(() => expect(lastPreview().leadership).toEqual([]))
+  expect(lastPreview().skills).toEqual([{ label: 'Languages', text: 'Python, Go' }])
+  expect(m.updateEntry).not.toHaveBeenCalled()
+  expect(m.check.mock.calls.at(-1)![1]).toContain('Python, Go') // ATS sees every included section
+})
+
+test('a flagged project bullet shows its flag under its project', async () => {
+  m.tailor.mockResolvedValue({ bullets: [
+    { text: 'Built 9 parsers', source_id: 'bullet_5', role_id: 'role_2', flags: ['unsupported_fact'] },
+  ] })
+  await tailored()
+  const group = screen.getByRole('heading', { name: 'Tailor App - Course Project, NUS' }).parentElement!
+  expect(within(group).getByText('Contradicts source')).toHaveAttribute('data-flag', 'contradicts')
+  await waitFor(() => expect(lastPreview().projects).toEqual([
+    { name: 'Tailor App', role: 'Course Project, NUS', dates: '2024', bullets: ['Built 9 parsers'] }]))
+  expect(lastPreview().experience).toEqual([])
 })

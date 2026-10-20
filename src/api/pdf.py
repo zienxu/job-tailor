@@ -7,11 +7,13 @@ from playwright.sync_api import sync_playwright
 
 TEMPLATES = Path(__file__).parent / "templates"
 _env = Environment(loader=FileSystemLoader(TEMPLATES), autoescape=select_autoescape())
+# Default section order = the layout-reference.pdf order. The header always comes first.
+ORDER = ["summary", "education", "experience", "leadership", "projects", "skills"]
 
 
 def render_html(resume: dict, base: str = TEMPLATES.as_uri() + "/") -> str:
     """`base` is where resume.css and fonts/ are served from; an HTTP preview passes its static URL."""
-    return _env.get_template("resume.html").render(r=resume, base=base)
+    return _env.get_template("resume.html").render(r=resume, order=resume.get("order") or ORDER, base=base)
 
 
 def render_pdf(resume: dict) -> bytes:

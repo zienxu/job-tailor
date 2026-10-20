@@ -101,3 +101,12 @@ def test_long_contact_wraps_instead_of_shrinking_page():
 
 def test_html_escapes_content():
     assert "<script>" not in render_html({**RESUME, "name": "<script>x</script>"})
+
+
+def test_sections_render_in_given_order():
+    html = render_html({**RESUME, "summary": "Sum.", "order": ["skills", "projects", "summary", "experience",
+                                                                "leadership", "education"]})
+    heads = ["Skills", "Projects", "Summary", "Experience", "Leadership", "Education"]
+    pos = [html.index(f"<h2>{h}</h2>") for h in heads]
+    assert pos == sorted(pos)
+    assert html.index("<header>") < pos[0]

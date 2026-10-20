@@ -132,3 +132,8 @@
 - Until 7c, tailored project bullets show in the Editor under their project like any role.
 - Why: the smallest change that keeps every existing role, citation and test path working.
 - Review fixes: `PUT` now writes only the fields sent (`exclude_unset`), so leaving out `kind` keeps it instead of resetting to experience (replaces the note above); the migration ignores "duplicate column" when two connections race; the Stories picker still shows an education role for a story already linked to it.
+
+## 2026-10-20 — Step 7c editor sections + order (built)
+- Chose: default order = layout-reference.pdf order (summary, education, experience, leadership, projects, skills), not the spec's listed order with projects before leadership, so the step 3 layout test stays valid; `order` is a Literal list on the Resume model (unknown section = 422) and `render_html` falls back to the default when a dict has none; leadership/skills labels render as `label:` with any trailing colon the user typed stripped first; education's per-draft edit is the detail lines only (school/degree/dates edited on the Education page); each version stores `order` plus the education/leadership/skills as sent, so step 8 can rebuild that PDF, but only `order` is pre-filled from the latest version.
+- Rejected: one Jinja include file per section (six files for six short blocks); a separate draft table for the copied sections (version JSON already holds the draft).
+- Why: user's answers in planning.

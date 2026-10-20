@@ -95,3 +95,18 @@ def test_happy_path_fixture_has_at_most_one_flag():
         out = tailor((FIXTURES / "job.txt").read_text(), profile)
     assert len(out["bullets"]) == 12
     assert sum(1 for b in out["bullets"] if b["flags"]) <= 1
+
+
+def test_preview_renders_all_sections_in_order(client):
+    resume = {"name": "Jane", "order": ["skills", "projects", "experience", "education", "leadership", "summary"],
+              "summary": "Sum.", "skills": [{"label": "Languages", "text": "Python"}],
+              "projects": [{"name": "Tailor", "role": "Course Project, NUS", "dates": "2024", "bullets": ["Built it."]}],
+              "experience": [{"company": "Acme", "title": "Engineer", "bullets": ["Shipped X."]}],
+              "education": [{"school": "NUS", "degree": "BComp", "date": "2025", "details": ["GPA 4.5"]}],
+              "leadership": [{"label": "Club:", "text": "Led it."}]}
+    html = client.post("/preview", json={"resume": resume}).text
+    pos = [html.index(f"<h2>{h}</h2>") for h in ("Skills", "Projects", "Experience", "Education", "Leadership", "Summary")]
+    assert pos == sorted(pos)
+    assert "<b>Languages:</b> Python" in html and "<b>Club:</b> Led it." in html
+    assert "<i>Course Project, NUS</i>" in html and "GPA 4.5" in html
+    assert client.post("/preview", json={"resume": {"order": ["footer"]}}).status_code == 422
