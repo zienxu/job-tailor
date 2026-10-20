@@ -91,3 +91,19 @@
 - Chose: stdlib urllib; POST /jobs/fetch returns {text, title, company, link} without saving (UI then calls POST /jobs); exact-host allowlist (boards/job-boards[.eu].greenhouse.io, jobs[.eu].lever.co), https only, path segments regex-checked before building the API URL; job HTML turned into text with a small regex strip; refusal = 422 "paste the text", upstream failure = 502 (error type only).
 - Rejected: httpx/requests as a runtime dependency (httpx is dev-only); fetch-and-save in one call (nothing should be stored before the user confirms); substring host checks (look-alike hosts); BeautifulSoup (new dependency for a few tags); Greenhouse `?gh_jid=` embeds on company sites and Workday (not official FETCH OK sources).
 - Why: spec allows only the official Greenhouse/Lever APIs, and a server-side fetch must never be steered at another host.
+
+## 2026-10-20 — Step 5b design foundation (planned)
+- Chose: Tailwind CSS v4 via @tailwindcss/vite, lucide-react icons, light/dark from prefers-color-scheme with CSS-variable tokens; collapsible left sidebar for all 4 pages (Editor/Tracker disabled until built); done now as its own step 5b, not at the end of the project.
+- Rejected: a component library (shadcn/Mantine: most dependencies, and the look comes from design choices, not the library); plain CSS (fine, but slower to iterate on the look); a slim top bar (user preferred a sidebar); amending step 5 (it is already committed as done); pixel-snapshot tests (break on every intentional tweak, so screenshots get manual sign-off instead).
+- Why: steps 7 and 8 reuse the tokens and shell, so settling them before more UI exists avoids restyling three times; unchanged labels keep the step 5 tests valid.
+
+## 2026-10-20 — Step 5b design foundation (built)
+- Chose: fonts bundled with @fontsource-variable (Public Sans for app chrome, Source Serif 4 for your own words: bullets, stories, headings) so it works offline; colors as CSS variables swapped by prefers-color-scheme and mapped into Tailwind with `@theme inline` (no `dark:` classes needed); shared `.field/.btn/.record` classes in index.css for steps 7 and 8; ruled bullets box; sidebar is an icon rail below 640px; `vite/client` added to tsconfig types so the CSS import type-checks; new packages pinned exactly like the existing ones.
+- Rejected: Google Fonts CDN (needs network on a localhost tool); system fonts only (look differs per machine); `dark:` variants on every class (doubles every color class); per-line bullet chips (would change the textarea logic step 5 tests rely on).
+- Spacing tokens: Tailwind's default 4px scale is the spacing token set; no custom scale.
+- Why: one token set drives both themes; steps 7 and 8 restyle nothing, they just reuse the classes.
+
+## 2026-10-20 — Step 5b edit mode (user request)
+- Chose: per-form `editing` flag plus an `orig` snapshot taken when Edit is clicked; inputs/textareas use readOnly (still selectable and copyable), the role select uses disabled (selects have no read-only state); Save and Delete stay visible but disabled while locked; Cancel restores the snapshot, or removes a never-saved item; Save locks only on full success.
+- Rejected: hiding the fields behind a separate view layout (two renderings of the same data to keep in sync); a page-wide edit mode (one Edit unlocking every role invites accidental edits to the others).
+- Why: the user wants saved facts protected from accidental edits, since the tailor cites them by ID and an edited bullet line becomes a new bullet.

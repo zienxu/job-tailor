@@ -36,3 +36,25 @@ test('saving without a role is refused', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Pick a role')
   expect(m.createStory).not.toHaveBeenCalled()
 })
+
+test('a saved story is locked until Edit, and a failed save stays unlocked', async () => {
+  m.listRoles.mockResolvedValue([{ id: 1, company: 'Acme', title: 'Engineer', start_date: '', end_date: '' }])
+  m.listStories.mockResolvedValue([{ id: 5, role_id: 1, text: 'Fixed the outage' }])
+  m.updateStory.mockRejectedValue(new Error('PUT /stories/5 failed: 500'))
+  const user = userEvent.setup()
+  render(<Stories />)
+
+  const story = await screen.findByDisplayValue('Fixed the outage')
+  expect(story).toHaveAttribute('readonly')
+  expect(screen.getByLabelText('Role')).toBeDisabled()
+  expect(screen.getByText('Save')).toBeDisabled()
+
+  await user.click(screen.getByText('Edit'))
+  expect(screen.getByLabelText('Role')).toBeEnabled()
+  await user.type(story, ' twice')
+  await user.click(screen.getByText('Save'))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('500')
+  expect(screen.getByText('Cancel')).toBeInTheDocument()
+  expect(story).not.toHaveAttribute('readonly')
+})

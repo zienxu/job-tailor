@@ -1,0 +1,92 @@
+@import "tailwindcss";
+@import "@fontsource-variable/public-sans";
+@import "@fontsource-variable/source-serif-4";
+
+:root {
+  color-scheme: light dark;
+  --paper: #eef1f5;
+  --surface: #ffffff;
+  --ink: #1a2233;
+  --muted: #5a6578;
+  --line: #d5dbe4;
+  --field-line: #8a94a6;
+  --rule: #e2e7ee;
+  --accent: #2747a8;
+  --accent-ink: #ffffff;
+  --danger: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #121823;
+    --surface: #1a2230;
+    --ink: #e6eaf2;
+    --muted: #9aa5b8;
+    --line: #2c3747;
+    --field-line: #66748c;
+    --rule: #263142;
+    --accent: #8ea6ff;
+    --accent-ink: #0e1424;
+    --danger: #ff8a80;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-field-line: var(--field-line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+  --font-sans: "Public Sans Variable", system-ui, sans-serif;
+  --font-serif: "Source Serif 4 Variable", Georgia, serif;
+}
+
+@layer base {
+  body {
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .page-title { @apply font-serif text-4xl font-semibold tracking-tight; }
+  .page-lede { @apply mt-2 max-w-prose text-muted; }
+  .record { @apply rounded-xl border border-line bg-surface p-5 transition-colors focus-within:border-accent/60 motion-reduce:transition-none sm:p-6; }
+  .label { @apply flex flex-col gap-1.5 text-sm font-medium text-muted; }
+  .field { @apply w-full rounded-md border border-field-line bg-surface px-3 py-2 text-base font-normal text-ink focus:border-accent focus-visible:outline-offset-0; }
+  .btn { @apply inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none; }
+  .btn-primary { @apply bg-accent text-accent-ink hover:bg-accent/90; }
+  .btn-secondary { @apply border border-line bg-surface text-ink hover:border-accent; }
+  .btn-quiet { @apply text-danger hover:bg-danger/10; }
+  input.field:read-only, textarea.field:read-only, select.field:disabled {
+    border-color: var(--line);
+    background-color: transparent;
+    color: var(--ink);
+    opacity: 1;
+  }
+  .alert { @apply mb-5 rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger; }
+}
+
+/* Notebook ruling; a long bullet that wraps spans two rules. */
+.ruled {
+  line-height: 1.75rem;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(1.75rem - 1px),
+    var(--rule) calc(1.75rem - 1px),
+    var(--rule) 1.75rem
+  );
+  background-origin: content-box;
+  background-clip: content-box;
+  background-attachment: local;
+}
