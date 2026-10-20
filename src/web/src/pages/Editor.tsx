@@ -31,7 +31,6 @@ function toResume(name: string, contacts: string, summary: string, roles: api.Ro
   const cited = (kind: api.RoleKind) => roles
     .filter((r) => r.kind === kind)
     .map((r) => ({ r, bullets: bullets.filter((b) => b.role_id === `role_${r.id}`).map((b) => b.text) }))
-    .filter((x) => x.bullets.length > 0)
   const on = (section: Extra['section']) => extras.filter((e) => e.on && e.section === section)
   const labelled = (section: Extra['section']) => on(section).map((e) => ({ label: e.label, text: e.text }))
   return {
@@ -197,9 +196,11 @@ export default function Editor() {
   const canDownload = jobId !== null && unresolved === 0 && reviewed && !checking && !busy
 
   const groups = [
-    ...roles.filter((r) => r.kind !== 'education').map((r) => ({ id: `role_${r.id}`, title: `${r.company} - ${r.title}`, cited: true })),
-    { id: null, title: 'Uncited (left out of the PDF)', cited: false },
-  ].map((g) => ({ ...g, items: bullets.filter((b) => b.role_id === g.id) })).filter((g) => g.items.length > 0)
+    ...roles.filter((r) => r.kind !== 'education').map((r) => ({ id: `role_${r.id}`, title: `${r.company} - ${r.title}`, dates: dates(r), cited: true })),
+    { id: null, title: 'Uncited (left out of the PDF)', dates: '', cited: false },
+  ].map((g) => ({ ...g, items: bullets.filter((b) => b.role_id === g.id) }))
+    // Every role keeps its card (a zero-bullet role shows its header only); uncited only when it has bullets.
+    .filter((g) => g.cited || g.items.length > 0)
 
   function renderBullet(b: Bullet, cited: boolean) {
     const n = bullets.indexOf(b) + 1
@@ -212,7 +213,7 @@ export default function Editor() {
             className="field font-serif leading-relaxed"
             rows={2}
             value={b.text}
-            onChange={(e) => editBullet(b.key, { text: e.target.value, kept: false })}
+            onChange={(e) => editBullet(b.key, { text: e.target.value, kept: false, fallback: false })}
           />
           <button type="button" className="btn btn-quiet px-2" title="Remove bullet" aria-label={`Remove bullet ${n}`} onClick={() => removeBullet(b.key)}>
             <X aria-hidden size={16} />
@@ -311,7 +312,9 @@ export default function Editor() {
           {groups.map((g) => (
             <div key={g.id ?? 'uncited'} className="record">
               <h2 className="font-serif text-lg font-semibold">{g.title}</h2>
-              <ul className="mt-3 flex flex-col gap-4">{g.items.map((b) => renderBullet(b, g.cited))}</ul>
+              {g.dates && <p className="text-sm text-muted">{g.dates}</p>}
+              {g.items.some((b) => b.fallback) && <p className="text-sm text-muted">Copied as saved</p>}
+              {g.items.length > 0 && <ul className="mt-3 flex flex-col gap-4">{g.items.map((b) => renderBullet(b, g.cited))}</ul>}
             </div>
           ))}
           {jobId !== null && (

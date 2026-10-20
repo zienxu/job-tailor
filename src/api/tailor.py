@@ -15,6 +15,7 @@ SYSTEM_PROMPT = (
     "and stories. For every output bullet, pick the single most relevant source and "
     "set source_id to its id exactly as given. Do not invent facts, numbers, "
     "companies, or titles not present in the cited source. "
+    "Sources are grouped by role; write at least 1 bullet for every role. "
     'Respond with JSON only: {"bullets": [{"text": "...", "source_id": "..."}]}'
 )
 
@@ -32,12 +33,15 @@ def _sources(profile: dict) -> dict[str, str]:
 
 
 def build_prompt(job_text: str, profile: dict) -> str:
-    return json.dumps({"job": job_text, "sources": _sources(profile)})
+    items = profile.get("bullets", []) + profile.get("stories", [])
+    roles = [{**r, "sources": {s["id"]: s["text"] for s in items if s["role_id"] == r["id"]}}
+             for r in profile.get("roles", [])]
+    return json.dumps({"job": job_text, "roles": roles})
 
 
 def _flag_all_missing(sources: dict[str, str]) -> list[dict]:
     return [
-        {"text": "", "source_id": None, "flags": ["unparseable_response"]}
+        {"text": "", "source_id": None, "flags": ["unparseable_response"], "fallback": False}
     ]
 
 
@@ -61,5 +65,15 @@ def tailor(job_text: str, profile: dict) -> dict:
         text = b.get("text", "") if isinstance(b, dict) else ""
         source_id = b.get("source_id") if isinstance(b, dict) else None
         flags = check_bullet(text, source_id, sources)
-        out.append({"text": text, "source_id": source_id, "flags": flags})
+        out.append({"text": text, "source_id": source_id, "flags": flags, "fallback": False})
+
+    # Keep every role: an uncited role gets its first 2 saved bullets (already in position order), unchanged.
+    role_of = {s["id"]: s["role_id"] for s in stripped.get("bullets", []) + stripped.get("stories", [])}
+    covered = {role_of.get(b["source_id"]) for b in out if isinstance(b["source_id"], str)}
+    for r in stripped.get("roles", []):
+        if r["id"] in covered:
+            continue
+        for b in [b for b in stripped.get("bullets", []) if b["role_id"] == r["id"]][:2]:
+            out.append({"text": b["text"], "source_id": b["id"],
+                        "flags": check_bullet(b["text"], b["id"], sources), "fallback": True})
     return {"contacts": contacts, "bullets": out}

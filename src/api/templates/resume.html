@@ -27,7 +27,7 @@
 {% for x in r.experience %}
 <div class="row"><b>{{ x.company }}</b><span>{{ x.dates }}</span></div>
 <div><i>{{ x.title }}</i></div>
-<ul>{% for b in x.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
+{% if x.bullets %}<ul>{% for b in x.bullets %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
 {% endfor %}
 {% elif s == 'leadership' and r.leadership %}
 <h2>Leadership</h2>
@@ -37,7 +37,7 @@
 {% for p in r.projects %}
 <div class="row"><b>{{ p.name }}</b><span>{{ p.dates }}</span></div>
 <div><i>{{ p.role }}</i></div>
-<ul>{% for b in p.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
+{% if p.bullets %}<ul>{% for b in p.bullets %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
 {% endfor %}
 {% elif s == 'skills' and r.skills %}
 <h2>Skills</h2>

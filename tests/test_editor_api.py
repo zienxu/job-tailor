@@ -110,3 +110,20 @@ def test_preview_renders_all_sections_in_order(client):
     assert "<b>Languages:</b> Python" in html and "<b>Club:</b> Led it." in html
     assert "<i>Course Project, NUS</i>" in html and "GPA 4.5" in html
     assert client.post("/preview", json={"resume": {"order": ["footer"]}}).status_code == 422
+
+
+def test_tailor_never_sends_or_falls_back_to_education(seeded):
+    client, job_id, _, _ = seeded
+    edu = client.post("/roles", json={"company": "NUS", "title": "BComp", "kind": "education"}).json()["id"]
+    client.post("/bullets", json={"role_id": edu, "text": "GPA 4.5 secret"})
+    with patch("src.api.tailor.llm.complete", return_value=json.dumps({"bullets": []})) as mock:
+        out = client.post(f"/jobs/{job_id}/tailor").json()
+    assert "GPA 4.5" not in mock.call_args.args[1]
+    assert [b["text"] for b in out["bullets"]] == ["Cut build time by 40% with caching."]
+    assert out["bullets"][0]["fallback"] is True and out["bullets"][0]["flags"] == []
+
+
+def test_zero_bullet_role_renders_header_only(client):
+    html = client.post("/preview", json={"resume": {"experience": [
+        {"company": "Acme Corp", "title": "Engineer", "dates": "2020", "bullets": []}]}}).text
+    assert "Engineer" in html and "<li>" not in html.split("Acme Corp", 1)[1]

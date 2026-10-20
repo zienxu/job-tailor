@@ -147,3 +147,8 @@
 - Chose: `POST /{table}/{a}/swap/{b}` (roles, entries) swaps two positions in one commit; a SQLite AFTER INSERT trigger sets `position = id` when none is given; bullets get position through the normal POST/PUT (`Bullet` model).
 - Rejected: PUT with a position field for roles/entries (PUT needs the full body, so a move would save unsaved form edits, and two PUTs aren't atomic); setting the initial position in app code (trigger covers every insert path).
 - Why: smallest change that keeps moves atomic and leaves the edit flow untouched.
+
+## 2026-10-20 — Step 7c2 keep all roles
+- Chose: fallback fill lives in `tailor()` (it already has roles and bullets); a role counts as covered if any LLM bullet cites one of its bullets or stories, flagged or not; an unparseable LLM response gets no fallback.
+- Rejected: fallback on unparseable responses (would make a failed call look half-done); doing it in main.py (the role map would be built twice).
+- Why: fail closed stays one clear flag; covered = cited matches the spec's "no cited bullet".

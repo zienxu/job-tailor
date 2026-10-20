@@ -164,5 +164,22 @@ test('a flagged project bullet shows its flag under its project', async () => {
   expect(within(group).getByText('Contradicts source')).toHaveAttribute('data-flag', 'contradicts')
   await waitFor(() => expect(lastPreview().projects).toEqual([
     { name: 'Tailor App', role: 'Course Project, NUS', dates: '2024', bullets: ['Built 9 parsers'] }]))
-  expect(lastPreview().experience).toEqual([])
+  // Acme has no bullets in this draft but keeps its header line.
+  expect(lastPreview().experience).toEqual([{ company: 'Acme', title: 'Engineer', dates: '2020 - 2023', bullets: [] }])
+})
+
+test('a zero-bullet role keeps its header and fallback bullets say "Copied as saved"', async () => {
+  m.tailor.mockResolvedValue({ bullets: [
+    { text: 'Cut build time by 40%', source_id: 'bullet_1', role_id: 'role_1', flags: [], fallback: true },
+  ] })
+  await tailored()
+  const acme = screen.getByRole('heading', { name: 'Acme - Engineer' }).parentElement!
+  expect(within(acme).getByText('Copied as saved')).toBeInTheDocument()
+  const app = screen.getByRole('heading', { name: 'Tailor App - Course Project, NUS' }).parentElement!
+  expect(within(app).queryByText('Copied as saved')).toBeNull()
+  // Once edited, the bullet is no longer copied as saved.
+  await userEvent.setup().type(within(acme).getByLabelText('Bullet 1'), '!')
+  expect(within(acme).queryByText('Copied as saved')).toBeNull()
+  await waitFor(() => expect(lastPreview().projects).toEqual([
+    { name: 'Tailor App', role: 'Course Project, NUS', dates: '2024', bullets: [] }]))
 })
