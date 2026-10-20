@@ -119,3 +119,8 @@
 - Chose: download also waits until the fact check of the latest edit has returned; `/preview` and `/pdf` take a typed Resume model; 422 responses list only loc/msg/type, never the request body; a critic result from an older tailor run is dropped; the PDF blob URL is revoked after the click finishes.
 - Rejected: "Present" for a role with no end date (not in the spec, so left for the user); "Keep anyway" on uncited bullets (they never reach the PDF).
 - Why: code-reviewer findings: flags from an older draft could pass the gate, and FastAPI's default 422 echoed contacts into the on-screen error.
+
+## 2026-10-20 — Steps 7b–7d resume sections, bold, links (planned)
+- Chose: projects and education as roles with a `kind` column (education never sent to the tailor); leadership/skills in an `entries` table as label + text, copied verbatim with a per-draft include tick and editable text; project bullets tailored and fact-checked like experience; section order set with up/down buttons in the Editor, saved in each version and pre-filled from the latest; bold as `**word**` with a B button / Ctrl+B, rendered after escaping, stripped for ATS and fact check, kept by the tailor; contacts auto-linked (mailto/tel/https), styled as plain text.
+- Rejected: rich-text editing (breaks the line-matched bullet textarea that keeps citation IDs, new dependency, test churn); a separate projects table (duplicates role CRUD, citations, fact check); LLM-tailored leadership/skills; a global section-order setting; per-draft-only order; "Text | URL" contact syntax; blue underlined links.
+- Why: user's answers in planning; reuse the existing role/citation path instead of a parallel one.
