@@ -9,7 +9,7 @@ export type EntryFields = { section: Section; label: string; text: string }
 export type Entry = EntryFields & { id: number }
 
 export type Job = { id: number; text: string; company: string; title: string; link: string }
-export type DraftBullet = { text: string; source_id: string | null; role_id: string | null; flags: string[]; fallback?: boolean }
+export type DraftBullet = { text: string; source_id: string | null; role_id: string | null; flags: string[]; fallback?: boolean; included?: boolean }
 export type Ats = { label: string; score: number; matched: string[]; missing: string[] }
 export type Note = { text: string; reason: string }
 export type Critique = {

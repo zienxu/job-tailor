@@ -4,7 +4,7 @@ import * as api from '../api'
 import CriticPanel from '../components/CriticPanel'
 import ScorePanel from '../components/ScorePanel'
 
-type Bullet = api.DraftBullet & { key: number; kept?: boolean }
+type Bullet = api.DraftBullet & { key: number; kept?: boolean; included: boolean }
 // Education and skills are copied as saved, never sent to the LLM; edits here stay in this draft.
 type Extra = { key: string; section: 'education' | 'skills'; label: string; sub: string; date: string; text: string; on: boolean }
 const DEFAULT_ORDER: api.SectionKey[] = ['summary', 'education', 'experience', 'leadership', 'projects', 'skills']
@@ -19,7 +19,7 @@ const PAGE_H = 1056
 const kindOf = (flag: string) => (flag === 'unsupported_fact' ? 'contradicts' : 'missing')
 const CHIPS = {
   missing: { label: 'Missing citation', Icon: Unlink, cls: 'border-warn/50 bg-warn/10 text-warn' },
-  contradicts: { label: 'Contradicts source', Icon: TriangleAlert, cls: 'border-danger/50 bg-danger/10 text-danger' },
+  contradicts: { label: 'Not in your saved text', Icon: TriangleAlert, cls: 'border-danger/50 bg-danger/10 text-danger' },
 }
 
 const lines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean)
@@ -30,7 +30,7 @@ function toResume(name: string, contacts: string, summary: string, roles: api.Ro
   extras: Extra[], order: api.SectionKey[]): api.Resume {
   const cited = (kind: api.RoleKind) => roles
     .filter((r) => r.kind === kind)
-    .map((r) => ({ r, bullets: bullets.filter((b) => b.role_id === `role_${r.id}`).map((b) => b.text) }))
+    .map((r) => ({ r, bullets: bullets.filter((b) => b.included && b.role_id === `role_${r.id}`).map((b) => b.text) }))
   const on = (section: Extra['section']) => extras.filter((e) => e.on && e.section === section)
   const rows = (kind: api.RoleKind) => cited(kind).map(({ r, bullets }) => ({ name: r.company, role: r.title, dates: dates(r), bullets }))
   return {
@@ -148,12 +148,12 @@ export default function Editor() {
     try {
       const job = await api.createJob(jobText)
       const out = await api.tailor(job.id)
-      const bs = out.bullets.map((b) => ({ ...b, key: nextKey++ }))
+      const bs = out.bullets.map((b) => ({ ...b, included: b.included ?? true, key: nextKey++ }))
       jobRef.current = job.id
       setJobId(job.id)
       setBullets(bs)
       setCritic(null)
-      runCritic(job.id, bs)
+      runCritic(job.id, bs.filter((b) => b.included))
     } catch (e) {
       setError((e as Error).message)
     }
@@ -192,7 +192,7 @@ export default function Editor() {
     return next
   })
 
-  const unresolved = bullets.filter((b) => b.flags.length > 0 && !b.kept).length
+  const unresolved = bullets.filter((b) => b.included && b.flags.length > 0 && !b.kept).length
   const canDownload = jobId !== null && unresolved === 0 && reviewed && !checking && !busy
 
   const groups = [
@@ -206,8 +206,9 @@ export default function Editor() {
     const n = bullets.indexOf(b) + 1
     const kinds = [...new Set(b.flags.map(kindOf))]
     return (
-      <li key={b.key} className="flex flex-col gap-2">
+      <li key={b.key} className={`flex flex-col gap-2 ${b.included ? '' : 'opacity-60'}`}>
         <div className="flex items-start gap-2">
+          <input type="checkbox" className="mt-3" aria-label={`Include bullet ${n}`} checked={b.included} onChange={(e) => editBullet(b.key, { included: e.target.checked })} />
           <textarea
             aria-label={`Bullet ${n}`}
             className="field font-serif leading-relaxed"
@@ -313,7 +314,7 @@ export default function Editor() {
             <div key={g.id ?? 'uncited'} className="record">
               <h2 className="font-serif text-lg font-semibold">{g.title}</h2>
               {g.dates && <p className="text-sm text-muted">{g.dates}</p>}
-              {g.items.some((b) => b.fallback) && <p className="text-sm text-muted">Copied as saved</p>}
+              {g.items.some((b) => b.included && b.fallback) && <p className="text-sm text-muted">Copied as saved</p>}
               {g.items.length > 0 && <ul className="mt-3 flex flex-col gap-4">{g.items.map((b) => renderBullet(b, g.cited))}</ul>}
             </div>
           ))}
@@ -334,7 +335,7 @@ export default function Editor() {
         </div>
         <aside className="flex min-w-0 flex-col gap-5">
           <ScorePanel ats={ats} />
-          <CriticPanel critic={critic} loading={criticLoading} disabled={jobId === null} onRerun={() => jobId !== null && runCritic(jobId, bullets)} />
+          <CriticPanel critic={critic} loading={criticLoading} disabled={jobId === null} onRerun={() => jobId !== null && runCritic(jobId, bullets.filter((b) => b.included))} />
           {html && (
             <div className="flex flex-col gap-2">
               <button type="button" className="btn btn-secondary self-end" onClick={() => fullRef.current?.showModal()}>

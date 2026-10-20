@@ -157,3 +157,8 @@
 - Chose: `_migrate_leadership` in `connect()` moves leadership entries to roles in one `BEGIN IMMEDIATE` transaction (new positions = MAX(roles.position)+i, so they land after existing leadership roles with no ties); one template branch renders Projects and Leadership, hiding the italic line when the role is empty; Position is optional on the Leadership page (migrated rows have none); test_pdf compares anchors from the Projects heading down after subtracting the one shift the taller Leadership rows add, and drops the `[Organization / Role]:` anchor; saved versions no longer store `leadership` (its bullets are in `bullets`, like projects).
 - Rejected: keeping the reference's one-line "label: text" Leadership (spec says render like Projects); checking only anchors above Leadership (loses Projects/Skills layout checks); requiring Position (migrated rows couldn't be re-saved); converting old saved versions (spec Open item).
 - Why: user's answers in planning; every leadership path then reuses the existing role code with no special cases.
+
+## 2026-10-21 — Step 7c2d best 3 per role
+- Chose: flag label "Not in your saved text" (user's choice; a citation can be a story, so "saved bullet" was wrong there); the unparseable bullet gets `included: true`; the Editor treats a missing `included` as true; the Uncited group also gets the include checkbox (unticking takes it out of the review gate, like Remove); unticked textareas stay editable, only muted.
+- Rejected: "Not in your saved bullet" (spec draft wording); disabling unticked textareas like copied sections (the tick is a selection, not a lock).
+- Why: the review gate must still see any flagged bullet that would reach the user; fewer special cases in the Editor.

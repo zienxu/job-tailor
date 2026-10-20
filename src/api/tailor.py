@@ -8,15 +8,16 @@ Profile shape: {"contacts": {"name", "email", "phone"},
 import json
 
 from src.api import llm
+from src.api.ats import _tokens, extract_terms
 from src.api.factcheck import check_bullet
 
 SYSTEM_PROMPT = (
     "You tailor a resume to a job description using ONLY the given source bullets "
-    "and stories. Write one tailored bullet for every saved bullet, with source_id set to "
-    "that bullet's id exactly as given; you may also add bullets drawn from a role's own "
-    "stories, citing the story id. Do not invent facts, numbers, "
+    "and stories. Sources are grouped by role. For every role write at most 3 bullets, the "
+    "ones most relevant to the job, and at least 1; fewer than 3 is fine, never pad. "
+    "Set source_id to the cited bullet's id exactly as given; you may also write bullets "
+    "drawn from a role's own stories, citing the story id. Do not invent facts, numbers, "
     "companies, or titles not present in the cited source. "
-    "Sources are grouped by role; write at least 1 bullet for every role. "
     'Respond with JSON only: {"bullets": [{"text": "...", "source_id": "..."}]}'
 )
 
@@ -42,7 +43,8 @@ def build_prompt(job_text: str, profile: dict) -> str:
 
 def _flag_all_missing(sources: dict[str, str]) -> list[dict]:
     return [
-        {"text": "", "source_id": None, "flags": ["unparseable_response"], "fallback": False}
+        {"text": "", "source_id": None, "flags": ["unparseable_response"], "fallback": False,
+         "included": True}
     ]
 
 
@@ -66,12 +68,25 @@ def tailor(job_text: str, profile: dict) -> dict:
         text = b.get("text", "") if isinstance(b, dict) else ""
         source_id = b.get("source_id") if isinstance(b, dict) else None
         flags = check_bullet(text, source_id, sources)
-        out.append({"text": text, "source_id": source_id, "flags": flags, "fallback": False})
+        # Bullets without a valid citation stay included, so the review gate still sees their flag.
+        out.append({"text": text, "source_id": source_id, "flags": flags, "fallback": False, "included": True})
 
-    # Keep every saved bullet: any the LLM did not cite is added unchanged, by role then position.
+    terms = extract_terms(job_text)
+
+    def hits(text: str) -> int:
+        tokens = set(_tokens(text))
+        return sum(t in tokens for t in terms)
+
+    role_of = {s["id"]: s["role_id"] for s in stripped.get("bullets", []) + stripped.get("stories", [])}
     cited = {b["source_id"] for b in out if isinstance(b["source_id"], str)}
+    # Keep every saved bullet, but include only the best 3 LLM bullets per role (unflagged, then
+    # job-term hits, then output order), or an uncited role's first saved bullet. Never pad.
     for r in stripped.get("roles", []):
-        for b in [b for b in stripped.get("bullets", []) if b["role_id"] == r["id"] and b["id"] not in cited]:
-            out.append({"text": b["text"], "source_id": b["id"],
-                        "flags": check_bullet(b["text"], b["id"], sources), "fallback": True})
+        mine = [b for b in out if isinstance(b["source_id"], str) and role_of.get(b["source_id"]) == r["id"]]
+        for i, b in enumerate(sorted(mine, key=lambda b: (bool(b["flags"]), -hits(b["text"])))):
+            b["included"] = i < 3
+        uncited = [b for b in stripped.get("bullets", []) if b["role_id"] == r["id"] and b["id"] not in cited]
+        for i, b in enumerate(uncited):
+            out.append({"text": b["text"], "source_id": b["id"], "flags": check_bullet(b["text"], b["id"], sources),
+                        "fallback": True, "included": not mine and i == 0})
     return {"contacts": contacts, "bullets": out}

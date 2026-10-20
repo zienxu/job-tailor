@@ -33,6 +33,7 @@ def test_tailor_adds_role_id(seeded):
     with patch("src.api.tailor.llm.complete", return_value=llm_out):
         out = client.post(f"/jobs/{job_id}/tailor").json()
     assert [b["role_id"] for b in out["bullets"]] == [role, None]
+    assert [b["included"] for b in out["bullets"]] == [True, True]
 
 
 def test_check_scores_and_rechecks_flags(seeded):

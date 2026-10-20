@@ -58,7 +58,7 @@ test('typing a missing keyword raises the score', async () => {
 
 test('missing citation and contradicts source flags look different', async () => {
   await tailored()
-  const contradicts = screen.getByText('Contradicts source')
+  const contradicts = screen.getByText('Not in your saved text')
   const missing = screen.getByText('Missing citation')
   expect(contradicts).toHaveAttribute('data-flag', 'contradicts')
   expect(missing).toHaveAttribute('data-flag', 'missing')
@@ -71,7 +71,7 @@ test('fixing a bullet clears its flag', async () => {
   const user = await tailored()
   await user.clear(screen.getByLabelText('Bullet 2'))
   await user.type(screen.getByLabelText('Bullet 2'), 'Led 2 teams')
-  await waitFor(() => expect(screen.queryByText('Contradicts source')).not.toBeInTheDocument())
+  await waitFor(() => expect(screen.queryByText('Not in your saved text')).not.toBeInTheDocument())
 })
 
 test('re-run calls the critic again', async () => {
@@ -118,7 +118,7 @@ test('download waits for the fact check of the latest edit', async () => {
   const download = screen.getByRole('button', { name: /Download PDF/ })
   expect(download).toBeDisabled()
 
-  await waitFor(() => { release(); expect(screen.getAllByText('Contradicts source')).toHaveLength(2) })
+  await waitFor(() => { release(); expect(screen.getAllByText('Not in your saved text')).toHaveLength(2) })
   expect(download).toBeDisabled() // the late check found a new flag, so the gate still holds
 })
 
@@ -160,7 +160,7 @@ test('a flagged project bullet shows its flag under its project', async () => {
   ] })
   await tailored()
   const group = screen.getByRole('heading', { name: 'Tailor App - Course Project, NUS' }).parentElement!
-  expect(within(group).getByText('Contradicts source')).toHaveAttribute('data-flag', 'contradicts')
+  expect(within(group).getByText('Not in your saved text')).toHaveAttribute('data-flag', 'contradicts')
   await waitFor(() => expect(lastPreview().projects).toEqual([
     { name: 'Tailor App', role: 'Course Project, NUS', dates: '2024', bullets: ['Built 9 parsers'] }]))
   // Acme has no bullets in this draft but keeps its header line.
@@ -194,4 +194,34 @@ test('leadership bullets sit under their role card and reach the preview as rows
   await waitFor(() => expect(lastPreview().leadership).toEqual([
     { name: 'Chess Club', role: 'President', dates: '', bullets: ['Led 20 members'] }]))
   expect(m.check.mock.calls.at(-1)![1]).toContain('Led 20 members')
+})
+
+test('unticking a bullet removes it from the preview payload but keeps it visible', async () => {
+  const user = await tailored()
+  await user.click(screen.getByLabelText('Include bullet 1'))
+  await waitFor(() => expect(lastPreview().experience[0].bullets).toEqual(['Led 9 teams']))
+  expect(screen.getByLabelText('Bullet 1')).toHaveValue('Cut build time by 40%')
+})
+
+test('an unticked flagged bullet does not block the review gate', async () => {
+  const user = await tailored()
+  const download = screen.getByRole('button', { name: /Download PDF/ })
+  await user.click(screen.getByLabelText('Include bullet 2'))
+  await user.click(screen.getByLabelText('Include bullet 3'))
+  await user.click(screen.getByLabelText("I've reviewed this draft"))
+  await waitFor(() => expect(download).toBeEnabled())
+})
+
+test('only included bullets reach leadership rows and the "Copied as saved" note', async () => {
+  m.tailor.mockResolvedValue({ bullets: [
+    { text: 'Led 20 members', source_id: 'bullet_7', role_id: 'role_4', flags: [], fallback: true, included: true },
+    { text: 'Booked venues', source_id: 'bullet_8', role_id: 'role_4', flags: [], fallback: true, included: false },
+    { text: 'Cut build time by 40%', source_id: 'bullet_1', role_id: 'role_1', flags: [], fallback: true, included: false },
+  ] })
+  await tailored()
+  expect(screen.getByLabelText('Include bullet 2')).not.toBeChecked()
+  await waitFor(() => expect(lastPreview().leadership).toEqual([
+    { name: 'Chess Club', role: 'President', dates: '', bullets: ['Led 20 members'] }]))
+  const acme = screen.getByRole('heading', { name: 'Acme - Engineer' }).parentElement!
+  expect(within(acme).queryByText('Copied as saved')).toBeNull()
 })

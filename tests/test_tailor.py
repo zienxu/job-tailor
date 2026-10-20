@@ -151,7 +151,7 @@ def test_prompt_groups_sources_by_role_and_asks_to_cover_every_role():
     with patch("src.api.tailor.llm.complete", return_value=mock_response([])) as mock:
         tailor(JOB_TEXT, PROFILE)
     system, user = mock.call_args.args
-    assert "every role" in system and "every saved bullet" in system
+    assert "every role" in system and "at most 3" in system
     roles = json.loads(user)["roles"]
     assert [r["id"] for r in roles] == ["role_1", "role_2"]
     assert "bullet_4" in roles[1]["sources"] and "bullet_4" not in roles[0]["sources"]
@@ -164,3 +164,47 @@ def test_non_string_source_id_is_flagged_not_a_crash():
         result = tailor(JOB_TEXT, PROFILE)
     assert result["bullets"][0]["flags"]
     assert "bullet_1" in [b["source_id"] for b in result["bullets"] if b["fallback"]]
+
+
+def _role_profile(n_saved):
+    return {"roles": [{"id": "a", "company": "A", "title": "T"}],
+            "bullets": [{"id": f"a{i}", "role_id": "a", "text": f"Did A thing {i} for 5 users."} for i in range(n_saved)],
+            "stories": []}
+
+
+def test_best_3_per_role_unflagged_first_then_job_term_hits():
+    job = "Need python, kubernetes and caching."
+    reply = mock_response([
+        {"text": "Did A thing 0 for 5 users.", "source_id": "a0"},                                  # 0 hits
+        {"text": "Did A thing 1 for 5 users with python.", "source_id": "a1"},                      # 1 hit
+        {"text": "Did A thing 2 for 99 users with python, kubernetes, caching.", "source_id": "a2"},  # flagged
+        {"text": "Did A thing 3 for 5 users with python and kubernetes.", "source_id": "a3"},       # 2 hits
+        {"text": "Did A thing 4 for 5 users with caching.", "source_id": "a4"},                     # 1 hit, after a1
+    ])
+    with patch("src.api.tailor.llm.complete", return_value=reply):
+        out = tailor(job, _role_profile(5))["bullets"]
+    assert out[2]["flags"] == ["unsupported_fact"]
+    assert [b["source_id"] for b in out if b["included"]] == ["a1", "a3", "a4"]
+    assert sum(b["included"] for b in out) == 3
+
+
+def test_role_with_one_llm_bullet_is_not_padded():
+    with patch("src.api.tailor.llm.complete", return_value=mock_response([
+        {"text": "Did A thing 2 for 5 users.", "source_id": "a2"}])):
+        out = tailor(JOB_TEXT, _role_profile(4))["bullets"]
+    assert [(b["source_id"], b["included"]) for b in out] == [
+        ("a2", True), ("a0", False), ("a1", False), ("a3", False)]
+    assert all(b["fallback"] for b in out[1:])
+
+
+def test_uncited_role_includes_only_its_first_saved_bullet():
+    with patch("src.api.tailor.llm.complete", return_value=mock_response([])):
+        out = tailor(JOB_TEXT, _role_profile(3))["bullets"]
+    assert [(b["source_id"], b["included"], b["fallback"]) for b in out] == [
+        ("a0", True, True), ("a1", False, True), ("a2", False, True)]
+
+
+def test_uncited_llm_bullet_stays_included_and_flagged():
+    with patch("src.api.tailor.llm.complete", return_value=mock_response([{"text": "Made it up."}])):
+        out = tailor(JOB_TEXT, _role_profile(1))["bullets"]
+    assert out[0]["included"] and out[0]["flags"] == ["missing_citation"]
