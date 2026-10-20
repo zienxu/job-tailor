@@ -14,6 +14,7 @@
   --accent: #2747a8;
   --accent-ink: #ffffff;
   --danger: #b3261e;
+  --warn: #8a5300;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -28,6 +29,7 @@
     --accent: #8ea6ff;
     --accent-ink: #0e1424;
     --danger: #ff8a80;
+    --warn: #f2b84b;
   }
 }
 
@@ -41,6 +43,7 @@
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
   --color-danger: var(--danger);
+  --color-warn: var(--warn);
   --font-sans: "Public Sans Variable", system-ui, sans-serif;
   --font-serif: "Source Serif 4 Variable", Georgia, serif;
 }

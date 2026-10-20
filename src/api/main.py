@@ -4,14 +4,28 @@ import sqlite3
 from typing import Annotated
 from urllib.error import HTTPError
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, StringConstraints
 
-from src.api import db
+from src.api import ats, db, pdf
+from src.api.critic import critique
+from src.api.factcheck import check_bullet
 from src.api.fetch_job import REFUSED, fetch_job
-from src.api.tailor import tailor
+from src.api.tailor import _sources, tailor
 
 app = FastAPI(title="job-tailor")
+# CSS and fonts for the editor preview; the Vite proxy serves this under /api.
+app.mount("/templates", StaticFiles(directory=pdf.TEMPLATES), name="templates")
+PREVIEW_BASE = "/api/templates/"
+
+
+@app.exception_handler(RequestValidationError)
+def validation_error(request: Request, exc: RequestValidationError):
+    # FastAPI's default 422 echoes the request body (resume, contacts) back into the UI's error alert.
+    return JSONResponse({"detail": [{k: e[k] for k in ("loc", "msg", "type")} for e in exc.errors()]}, 422)
 
 NonBlank = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
@@ -131,10 +145,73 @@ def get_job(id: int, conn=Depends(get_conn)):
 @app.post("/jobs/{id}/tailor")
 def tailor_job(id: int, conn=Depends(get_conn)):
     job = _get(conn, "jobs", id)
+    profile = db.load_profile(conn)
     try:
-        return tailor(job["text"], db.load_profile(conn))
+        result = tailor(job["text"], profile)
     except Exception as e:  # LLM call failed; never echo prompt or profile
         raise HTTPException(502, f"LLM call failed: {type(e).__name__}")
+    # The editor groups bullets under the role their cited source belongs to.
+    role_of = {s["id"]: s["role_id"] for s in profile["bullets"] + profile["stories"]}
+    for b in result["bullets"]:
+        sid = b["source_id"]
+        b["role_id"] = role_of.get(sid) if isinstance(sid, str) else None
+    return result
+
+
+class CitedBullet(BaseModel):
+    text: str
+    source_id: str | None = None
+
+
+class CheckReq(BaseModel):
+    text: str
+    bullets: list[CitedBullet]
+
+
+@app.post("/jobs/{id}/check")
+def check_draft(id: int, body: CheckReq, conn=Depends(get_conn)):
+    job = _get(conn, "jobs", id)
+    sources = _sources(db.load_profile(conn))
+    return {"ats": ats.score(job["text"], body.text),
+            "flags": [check_bullet(b.text, b.source_id, sources) for b in body.bullets]}
+
+
+class CritiqueReq(BaseModel):
+    bullets: list[CitedBullet]
+
+
+@app.post("/jobs/{id}/critique")
+def critique_draft(id: int, body: CritiqueReq, conn=Depends(get_conn)):
+    job = _get(conn, "jobs", id)
+    return critique(job["text"], {"bullets": [{"text": b.text} for b in body.bullets]})
+
+
+class ExperienceEntry(BaseModel):
+    company: str
+    title: str
+    dates: str = ""
+    bullets: list[str]
+
+
+class Resume(BaseModel):
+    name: str = ""
+    contacts: list[str] = []
+    summary: str = ""
+    experience: list[ExperienceEntry] = []
+
+
+class Render(BaseModel):
+    resume: Resume
+
+
+@app.post("/preview", response_class=HTMLResponse)
+def preview(body: Render):
+    return pdf.render_html(body.resume.model_dump(), base=PREVIEW_BASE)
+
+
+@app.post("/pdf")
+def download_pdf(body: Render):  # plain def: render_pdf uses sync Playwright
+    return Response(pdf.render_pdf(body.resume.model_dump()), media_type="application/pdf")
 
 
 def _version(row) -> dict:
@@ -154,3 +231,9 @@ def list_versions(id: int, conn=Depends(get_conn)):
     _get(conn, "jobs", id)
     return [_version(r) for r in conn.execute(
         "SELECT * FROM resume_versions WHERE job_id = ? ORDER BY id", (id,))]
+
+
+@app.get("/versions/latest")
+def latest_version(conn=Depends(get_conn)):
+    row = conn.execute("SELECT * FROM resume_versions ORDER BY id DESC LIMIT 1").fetchone()
+    return _version(row) if row else None

@@ -30,11 +30,11 @@ test('nav switches between Experience and Stories', async () => {
   expect(screen.getByRole('button', { name: 'Experience' })).not.toHaveAttribute('aria-current')
 })
 
-test('Editor and Tracker cannot be opened yet', async () => {
+test('Tracker cannot be opened yet', async () => {
   const user = userEvent.setup()
   render(<App />)
 
-  for (const name of ['Editor', 'Tracker']) {
+  for (const name of ['Tracker']) {
     const item = screen.getByRole('button', { name })
     expect(item).toBeDisabled()
     await user.click(item)

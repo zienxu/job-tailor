@@ -2,6 +2,12 @@
 
 Paste research blocks here. One block per research session, newest first.
 
+# Research: Groq models (2026-10-20)
+- llama-3.3-70b-versatile and llama-3.1-8b-instant were shut down on 2026-08-16 (free and developer tiers). Groq names openai/gpt-oss-120b as the replacement. https://console.groq.com/docs/deprecations
+- Production text models left: openai/gpt-oss-120b (131k context, $0.15 in / $0.60 out per 1M tokens, ~500 tok/s) and openai/gpt-oss-20b. https://console.groq.com/docs/models
+- json_object mode works on all models; strict json_schema works on gpt-oss-120b/20b. https://console.groq.com/docs/structured-outputs
+- No retention of inference data by default; ZDR available in Data Controls. Training terms (Services Agreement/DPA) not yet re-checked. https://console.groq.com/docs/your-data
+
 # Research: blockers (2026-10-19)
 
 ## Job sources: access verdict

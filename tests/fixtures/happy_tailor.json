@@ -1,0 +1,14 @@
+{"bullets": [
+  {"text": "Led a team of 5 engineers to ship the checkout redesign.", "source_id": "bullet_1"},
+  {"text": "Reduced page load time by 40% through backend caching improvements.", "source_id": "bullet_2"},
+  {"text": "Designed REST APIs serving 3 million users.", "source_id": "bullet_3"},
+  {"text": "Automated the release pipeline (CI/CD), saving 10 hours per week.", "source_id": "bullet_9"},
+  {"text": "Wrote integration tests that caught 12 regressions before release, improving reliability.", "source_id": "bullet_7"},
+  {"text": "Resolved a critical production outage affecting 10000 users within 30 minutes.", "source_id": "story_1"},
+  {"text": "Mentored 2 junior engineers.", "source_id": "bullet_4"},
+  {"text": "Migrated the database from MySQL to PostgreSQL with zero downtime.", "source_id": "bullet_5"},
+  {"text": "Cut deployment time from 30 minutes to 5 minutes, improving deployment reliability.", "source_id": "bullet_6"},
+  {"text": "Built an internal tool adopted by 50 engineers across the company.", "source_id": "story_2"},
+  {"text": "Presented quarterly roadmap updates to 20 stakeholders across teams.", "source_id": "bullet_8"},
+  {"text": "Onboarded 4 new hires onto the platform team.", "source_id": "bullet_10"}
+]}

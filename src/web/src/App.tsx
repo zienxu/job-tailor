@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { BookOpen, Briefcase, ListChecks, PanelLeftClose, PanelLeftOpen, PenLine, type LucideIcon } from 'lucide-react'
+import Editor from './pages/Editor'
 import Experience from './pages/Experience'
 import Stories from './pages/Stories'
 
@@ -8,7 +9,7 @@ type Page = 'experience' | 'stories' | 'editor' | 'tracker'
 const PAGES: [Page, string, LucideIcon, boolean][] = [
   ['experience', 'Experience', Briefcase, true],
   ['stories', 'Stories', BookOpen, true],
-  ['editor', 'Editor', PenLine, false],
+  ['editor', 'Editor', PenLine, true],
   ['tracker', 'Tracker', ListChecks, false],
 ]
 
@@ -78,7 +79,7 @@ export default function App() {
         </button>
       </nav>
       <main className="min-w-0 flex-1 px-5 py-8 sm:px-10 sm:py-12">
-        {page === 'stories' ? <Stories /> : <Experience />}
+        {page === 'stories' ? <Stories /> : page === 'editor' ? <Editor /> : <Experience />}
       </main>
     </div>
   )

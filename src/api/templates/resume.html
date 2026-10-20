@@ -12,6 +12,11 @@
   <p class="contacts">{% for c in r.contacts %}{% if not loop.first %}<span class="dot sep"></span>{% endif %}{{ c }}{% endfor %}</p>
 </header>
 
+{% if r.summary %}
+<h2>Summary</h2>
+<p>{{ r.summary }}</p>
+{% endif %}
+
 {% if r.education %}
 <h2>Education</h2>
 {% for e in r.education %}

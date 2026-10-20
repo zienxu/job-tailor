@@ -61,3 +61,4 @@ REVIEW: code-reviewer on this feature
 - Whether MyCareersFuture's Terms of Use allow fetching (still unchecked).
 - Hosting later? (Out of scope now.)
 - Filling in the Stack/Run/Test lines in CLAUDE.md once step 3 exists.
+- Education, Leadership, Projects and Skills: not in the DB or editor yet, so the PDF has header, summary and Experience only (deferred from step 7).

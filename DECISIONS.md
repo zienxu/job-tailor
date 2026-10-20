@@ -107,3 +107,15 @@
 - Chose: per-form `editing` flag plus an `orig` snapshot taken when Edit is clicked; inputs/textareas use readOnly (still selectable and copyable), the role select uses disabled (selects have no read-only state); Save and Delete stay visible but disabled while locked; Cancel restores the snapshot, or removes a never-saved item; Save locks only on full success.
 - Rejected: hiding the fields behind a separate view layout (two renderings of the same data to keep in sync); a page-wide edit mode (one Edit unlocking every role invites accidental edits to the others).
 - Why: the user wants saved facts protected from accidental edits, since the tailor cites them by ID and an edited bullet line becomes a new bullet.
+
+## 2026-10-20 — Step 7 editor
+- Chose: one debounced `POST /jobs/{id}/check` that returns the ATS score and re-runs the fact check per bullet, so a fixed bullet loses its flag; `/tailor` adds each bullet's `role_id` from its cited source so the editor can group by role; name and contacts saved inside each version's JSON and pre-filled from `GET /versions/latest`; summary in the PDF only when not empty; review gate = every flag fixed, removed or marked "Keep anyway", plus an "I've reviewed this draft" tick that any edit clears; download saves a version first; uncited bullets are shown but left out of the PDF; preview in an `<iframe sandbox="allow-same-origin">` (no scripts) with template CSS/fonts served at /templates; flag kinds: `unsupported_fact` = "Contradicts source" (red), every citation problem = "Missing citation" (amber).
+- Rejected: porting ats.py to TypeScript (two scorers to keep in sync); a contacts table (versions already store the draft); a checkbox-only gate (lets flagged bullets through); sandbox without same-origin (opaque origin blocks the web fonts).
+- Tests: the spec's "about 1 flag on the happy-path fixture" check is in pytest (tests/test_editor_api.py), not Vitest, because only the real check_bullet makes it meaningful.
+- Skipped: job-link fetch UI (endpoint exists, paste is enough for the demo); editing company/title in the editor (use Experience); Education/Leadership/Projects/Skills (OPEN).
+- Why: user's answers in planning; one implementation of each check.
+
+## 2026-10-20 — Step 7 review fixes
+- Chose: download also waits until the fact check of the latest edit has returned; `/preview` and `/pdf` take a typed Resume model; 422 responses list only loc/msg/type, never the request body; a critic result from an older tailor run is dropped; the PDF blob URL is revoked after the click finishes.
+- Rejected: "Present" for a role with no end date (not in the spec, so left for the user); "Keep anyway" on uncited bullets (they never reach the PDF).
+- Why: code-reviewer findings: flags from an older draft could pass the gate, and FastAPI's default 422 echoed contacts into the on-screen error.
