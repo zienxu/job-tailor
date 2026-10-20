@@ -1,8 +1,12 @@
-export type RoleFields = { company: string; title: string; start_date: string; end_date: string }
+export type RoleKind = 'experience' | 'project' | 'education'
+export type RoleFields = { company: string; title: string; start_date: string; end_date: string; kind: RoleKind }
 export type Role = RoleFields & { id: number }
 export type ItemFields = { role_id: number; text: string }
 export type Bullet = ItemFields & { id: number }
 export type Story = ItemFields & { id: number }
+export type Section = 'leadership' | 'skills'
+export type EntryFields = { section: Section; label: string; text: string }
+export type Entry = EntryFields & { id: number }
 
 export type Job = { id: number; text: string; company: string; title: string; link: string }
 export type DraftBullet = { text: string; source_id: string | null; role_id: string | null; flags: string[] }
@@ -46,6 +50,11 @@ export const listStories = () => req<Story[]>('GET', '/stories')
 export const createStory = (s: ItemFields) => req<Story>('POST', '/stories', s)
 export const updateStory = (id: number, s: ItemFields) => req<Story>('PUT', `/stories/${id}`, s)
 export const deleteStory = (id: number) => req<void>('DELETE', `/stories/${id}`)
+
+export const listEntries = () => req<Entry[]>('GET', '/entries')
+export const createEntry = (e: EntryFields) => req<Entry>('POST', '/entries', e)
+export const updateEntry = (id: number, e: EntryFields) => req<Entry>('PUT', `/entries/${id}`, e)
+export const deleteEntry = (id: number) => req<void>('DELETE', `/entries/${id}`)
 
 export const createJob = (text: string) => req<Job>('POST', '/jobs', { text })
 export const tailor = (jobId: number) => req<{ bullets: DraftBullet[] }>('POST', `/jobs/${jobId}/tailor`)

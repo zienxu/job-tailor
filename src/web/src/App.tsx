@@ -1,13 +1,18 @@
 import { useState } from 'react'
-import { BookOpen, Briefcase, ListChecks, PanelLeftClose, PanelLeftOpen, PenLine, type LucideIcon } from 'lucide-react'
+import { Award, BookOpen, Briefcase, FolderGit2, GraduationCap, ListChecks, Wrench, PanelLeftClose, PanelLeftOpen, PenLine, type LucideIcon } from 'lucide-react'
 import Editor from './pages/Editor'
+import Entries from './pages/Entries'
 import Experience from './pages/Experience'
 import Stories from './pages/Stories'
 
-type Page = 'experience' | 'stories' | 'editor' | 'tracker'
+type Page = 'experience' | 'project' | 'education' | 'leadership' | 'skills' | 'stories' | 'editor' | 'tracker'
 
 const PAGES: [Page, string, LucideIcon, boolean][] = [
   ['experience', 'Experience', Briefcase, true],
+  ['project', 'Projects', FolderGit2, true],
+  ['education', 'Education', GraduationCap, true],
+  ['leadership', 'Leadership', Award, true],
+  ['skills', 'Skills', Wrench, true],
   ['stories', 'Stories', BookOpen, true],
   ['editor', 'Editor', PenLine, true],
   ['tracker', 'Tracker', ListChecks, false],
@@ -79,7 +84,11 @@ export default function App() {
         </button>
       </nav>
       <main className="min-w-0 flex-1 px-5 py-8 sm:px-10 sm:py-12">
-        {page === 'stories' ? <Stories /> : page === 'editor' ? <Editor /> : <Experience />}
+        {page === 'stories' ? <Stories />
+          : page === 'editor' ? <Editor />
+          : page === 'leadership' || page === 'skills' ? <Entries key={page} section={page} />
+          : page === 'project' || page === 'education' ? <Experience key={page} kind={page} />
+          : <Experience />}
       </main>
     </div>
   )

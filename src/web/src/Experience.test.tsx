@@ -12,7 +12,7 @@ beforeEach(() => vi.resetAllMocks())
 test('add a role and a bullet, then save', async () => {
   m.listRoles.mockResolvedValue([])
   m.listBullets.mockResolvedValue([])
-  m.createRole.mockResolvedValue({ id: 1, company: 'Acme', title: 'Engineer', start_date: '', end_date: '' })
+  m.createRole.mockResolvedValue({ id: 1, company: 'Acme', title: 'Engineer', start_date: '', end_date: '', kind: 'experience' })
   m.createBullet.mockResolvedValue({ id: 10, role_id: 1, text: 'Shipped X' })
   const user = userEvent.setup()
   render(<Experience />)
@@ -24,7 +24,7 @@ test('add a role and a bullet, then save', async () => {
   await user.click(screen.getByText('Save'))
 
   await waitFor(() => expect(m.createBullet).toHaveBeenCalledWith({ role_id: 1, text: 'Shipped X' }))
-  expect(m.createRole).toHaveBeenCalledWith({ company: 'Acme', title: 'Engineer', start_date: '', end_date: '' })
+  expect(m.createRole).toHaveBeenCalledWith({ company: 'Acme', title: 'Engineer', start_date: '', end_date: '', kind: 'experience' })
 })
 
 test('a role needs a company and title', async () => {
@@ -42,7 +42,7 @@ test('a role needs a company and title', async () => {
 })
 
 test('bullets are reloaded even when a bullet call fails', async () => {
-  const role = { id: 1, company: 'Acme', title: 'Engineer', start_date: '', end_date: '' }
+  const role = { id: 1, company: 'Acme', title: 'Engineer', start_date: '', end_date: '', kind: 'experience' as const }
   m.listRoles.mockResolvedValue([role])
   m.listBullets.mockResolvedValue([{ id: 10, role_id: 1, text: 'A' }])
   m.updateRole.mockResolvedValue(role)
@@ -60,7 +60,7 @@ test('bullets are reloaded even when a bullet call fails', async () => {
 })
 
 test('unchanged bullets keep their IDs; removed are deleted, new are created', async () => {
-  const role = { id: 1, company: 'Acme', title: 'Engineer', start_date: '', end_date: '' }
+  const role = { id: 1, company: 'Acme', title: 'Engineer', start_date: '', end_date: '', kind: 'experience' as const }
   m.listRoles.mockResolvedValue([role])
   m.listBullets.mockResolvedValue([{ id: 10, role_id: 1, text: 'A' }, { id: 11, role_id: 1, text: 'B' }])
   m.updateRole.mockResolvedValue(role)
@@ -80,7 +80,7 @@ test('unchanged bullets keep their IDs; removed are deleted, new are created', a
 })
 
 test('a saved role is locked until Edit; Cancel restores it, Save locks it again', async () => {
-  const role = { id: 1, company: 'Acme', title: 'Engineer', start_date: '', end_date: '' }
+  const role = { id: 1, company: 'Acme', title: 'Engineer', start_date: '', end_date: '', kind: 'experience' as const }
   m.listRoles.mockResolvedValue([role])
   m.listBullets.mockResolvedValue([])
   m.updateRole.mockResolvedValue({ ...role, company: 'Acme Corp' })
@@ -106,7 +106,7 @@ test('a saved role is locked until Edit; Cancel restores it, Save locks it again
   expect(await screen.findByText('Edit')).toBeInTheDocument()
   expect(screen.getByLabelText('Company')).toHaveValue('Acme Corp')
   expect(screen.getByLabelText('Company')).toHaveAttribute('readonly')
-  expect(m.updateRole).toHaveBeenCalledWith(1, { company: 'Acme Corp', title: 'Engineer', start_date: '', end_date: '' })
+  expect(m.updateRole).toHaveBeenCalledWith(1, { company: 'Acme Corp', title: 'Engineer', start_date: '', end_date: '', kind: 'experience' })
 })
 
 test('a new role opens unlocked, and Cancel discards it', async () => {
@@ -120,4 +120,25 @@ test('a new role opens unlocked, and Cancel discards it', async () => {
   expect(screen.getByText('Save')).toBeEnabled()
   await user.click(screen.getByText('Cancel'))
   expect(screen.queryByLabelText('Company')).not.toBeInTheDocument()
+})
+
+test('add a project with its own labels, saved as kind project', async () => {
+  m.listRoles.mockResolvedValue([{ id: 1, company: 'Acme', title: 'Engineer', start_date: '', end_date: '', kind: 'experience' }])
+  m.listBullets.mockResolvedValue([])
+  m.createRole.mockResolvedValue({ id: 2, company: 'Chess AI', title: 'Course Project, NUS', start_date: '', end_date: '', kind: 'project' })
+  m.createBullet.mockResolvedValue({ id: 10, role_id: 2, text: 'Built a solver' })
+  const user = userEvent.setup()
+  render(<Experience kind="project" />)
+
+  expect(screen.getByRole('heading', { name: 'Projects' })).toBeInTheDocument()
+  await waitFor(() => expect(m.listRoles).toHaveBeenCalled())
+  expect(screen.queryByDisplayValue('Acme')).not.toBeInTheDocument()
+  await user.click(screen.getByText('Add project'))
+  await user.type(screen.getByLabelText('Project'), 'Chess AI')
+  await user.type(screen.getByLabelText('Subtitle'), 'Course Project, NUS')
+  await user.type(screen.getByLabelText('Bullets (one per line)'), 'Built a solver')
+  await user.click(screen.getByText('Save'))
+
+  await waitFor(() => expect(m.createBullet).toHaveBeenCalledWith({ role_id: 2, text: 'Built a solver' }))
+  expect(m.createRole).toHaveBeenCalledWith({ company: 'Chess AI', title: 'Course Project, NUS', start_date: '', end_date: '', kind: 'project' })
 })

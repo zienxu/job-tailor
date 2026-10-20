@@ -1,7 +1,7 @@
 """FastAPI app. Run: .venv/bin/uvicorn src.api.main:app --env-file .env"""
 import json
 import sqlite3
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.error import HTTPError
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -43,10 +43,17 @@ class Role(BaseModel):
     title: str
     start_date: str = ""
     end_date: str = ""
+    kind: Literal["experience", "project", "education"] = "experience"
 
 
 class Item(BaseModel):
     role_id: int
+    text: NonBlank
+
+
+class Entry(BaseModel):
+    section: Literal["leadership", "skills"]
+    label: NonBlank
     text: NonBlank
 
 
@@ -97,8 +104,10 @@ def _crud(table: str, Model: type[BaseModel]) -> None:
     @app.put(f"/{table}/{{id}}")
     def update(id: int, body: Model, conn=Depends(get_conn)):
         _get(conn, table, id)
-        _write(conn, f"UPDATE {table} SET {', '.join(c + ' = ?' for c in cols)} WHERE id = ?",
-               [getattr(body, c) for c in cols] + [id])
+        # Only fields sent are written, so e.g. a PUT without kind can't turn a project into experience.
+        fields = body.model_dump(exclude_unset=True)
+        _write(conn, f"UPDATE {table} SET {', '.join(c + ' = ?' for c in fields)} WHERE id = ?",
+               [*fields.values(), id])
         return _get(conn, table, id)
 
     @app.delete(f"/{table}/{{id}}", status_code=204)
@@ -110,6 +119,7 @@ def _crud(table: str, Model: type[BaseModel]) -> None:
 _crud("roles", Role)
 _crud("bullets", Item)
 _crud("stories", Item)
+_crud("entries", Entry)
 
 
 @app.post("/jobs", status_code=201)

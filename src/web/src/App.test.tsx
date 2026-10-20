@@ -13,6 +13,7 @@ beforeEach(() => {
   m.listRoles.mockResolvedValue([])
   m.listBullets.mockResolvedValue([])
   m.listStories.mockResolvedValue([])
+  m.listEntries.mockResolvedValue([])
 })
 
 afterEach(() => vi.restoreAllMocks())
@@ -28,6 +29,17 @@ test('nav switches between Experience and Stories', async () => {
   expect(screen.getByRole('heading', { name: 'Stories' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Stories' })).toHaveAttribute('aria-current', 'page')
   expect(screen.getByRole('button', { name: 'Experience' })).not.toHaveAttribute('aria-current')
+})
+
+test('nav opens Projects, Education, Leadership and Skills', async () => {
+  const user = userEvent.setup()
+  render(<App />)
+
+  for (const name of ['Projects', 'Education', 'Leadership', 'Skills']) {
+    await user.click(screen.getByRole('button', { name }))
+    expect(screen.getByRole('heading', { name })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name })).toHaveAttribute('aria-current', 'page')
+  }
 })
 
 test('Tracker cannot be opened yet', async () => {

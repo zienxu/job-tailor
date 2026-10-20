@@ -11,7 +11,7 @@ const emptyCritique = { unmet_must_haves: [], weak_bullets: [], missing_keywords
 
 beforeEach(() => {
   vi.resetAllMocks()
-  m.listRoles.mockResolvedValue([{ id: 1, company: 'Acme', title: 'Engineer', start_date: '2020', end_date: '2023' }])
+  m.listRoles.mockResolvedValue([{ id: 1, company: 'Acme', title: 'Engineer', start_date: '2020', end_date: '2023', kind: 'experience' as const }])
   m.latestVersion.mockResolvedValue(null)
   m.createJob.mockResolvedValue({ id: 5, text: 'job', company: '', title: '', link: '' })
   m.tailor.mockResolvedValue({ bullets: [

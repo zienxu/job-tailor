@@ -1,4 +1,6 @@
 import json
+import sqlite3
+from contextlib import closing
 from unittest.mock import patch
 
 import pytest
@@ -91,3 +93,52 @@ def test_two_saves_make_two_versions(client):
     assert v1["id"] != v2["id"]
     versions = client.get(f"/jobs/{job_id}/versions").json()
     assert [v["content"] for v in versions] == [{"bullets": ["a"]}, {"bullets": ["b"]}]
+
+
+def test_role_kind_round_trip(client):
+    assert client.post("/roles", json={"company": "Acme", "title": "SWE"}).json()["kind"] == "experience"
+    role = client.post("/roles", json={"company": "Chess AI", "title": "Course Project, NUS", "kind": "project"}).json()
+    assert client.get(f"/roles/{role['id']}").json()["kind"] == "project"
+    put = client.put(f"/roles/{role['id']}", json={"company": "NUS", "title": "BComp", "kind": "education"})
+    assert put.json()["kind"] == "education"
+    put = client.put(f"/roles/{role['id']}", json={"company": "NUS", "title": "BSc"})
+    assert put.json()["kind"] == "education"  # omitted field is kept, not reset to the default
+    assert client.post("/roles", json={"company": "x", "title": "y", "kind": "hobby"}).status_code == 422
+
+
+def test_entries_crud_round_trip(client):
+    e = client.post("/entries", json={"section": "skills", "label": "Languages", "text": "Python"})
+    assert e.status_code == 201
+    eid = e.json()["id"]
+    client.post("/entries", json={"section": "leadership", "label": "President", "text": "Ran the club"})
+    client.put(f"/entries/{eid}", json={"section": "skills", "label": "Languages", "text": "Python, Go"})
+    assert [(x["section"], x["text"]) for x in client.get("/entries").json()] == [
+        ("skills", "Python, Go"), ("leadership", "Ran the club")]
+    assert client.post("/entries", json={"section": "hobbies", "label": "a", "text": "b"}).status_code == 422
+    assert client.post("/entries", json={"section": "skills", "label": " ", "text": "b"}).status_code == 422
+    assert client.delete(f"/entries/{eid}").status_code == 204
+    assert client.get(f"/entries/{eid}").status_code == 404
+
+
+def test_education_excluded_from_profile(client):
+    work = client.post("/roles", json={"company": "Acme", "title": "SWE"}).json()["id"]
+    proj = client.post("/roles", json={"company": "Chess AI", "title": "Project", "kind": "project"}).json()["id"]
+    edu = client.post("/roles", json={"company": "NUS", "title": "BComp", "kind": "education"}).json()["id"]
+    for rid in (work, proj, edu):
+        client.post("/bullets", json={"role_id": rid, "text": f"bullet {rid}"})
+        client.post("/stories", json={"role_id": rid, "text": f"story {rid}"})
+    with closing(db.connect()) as conn:
+        profile = db.load_profile(conn)
+    assert [r["id"] for r in profile["roles"]] == [f"role_{work}", f"role_{proj}"]
+    for table in ("bullets", "stories"):
+        assert {x["role_id"] for x in profile[table]} == {f"role_{work}", f"role_{proj}"}
+
+
+def test_old_db_without_kind_migrates(client):
+    old = sqlite3.connect(db.DB_PATH)
+    old.execute("CREATE TABLE roles (id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT NOT NULL,"
+                " title TEXT NOT NULL, start_date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '')")
+    old.execute("INSERT INTO roles (company, title) VALUES ('Acme', 'SWE')")
+    old.commit()
+    old.close()
+    assert [r["kind"] for r in client.get("/roles").json()] == ["experience"]

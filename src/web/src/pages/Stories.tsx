@@ -65,7 +65,7 @@ export default function Stories() {
             <label className="label">Role
               <select className="field" disabled={!f.editing} value={f.role_id} onChange={(e) => edit(i, { role_id: e.target.value ? Number(e.target.value) : '' })}>
                 <option value="">Pick a role</option>
-                {roles.map((r) => <option key={r.id} value={r.id}>{r.company} - {r.title}</option>)}
+                {roles.filter((r) => r.kind !== 'education' || r.id === f.role_id).map((r) => <option key={r.id} value={r.id}>{r.company} - {r.title}</option>)}
               </select>
             </label>
             <label className="label mt-4">Story<textarea className="field font-serif leading-relaxed" rows={5} readOnly={!f.editing} value={f.text} onChange={(e) => edit(i, { text: e.target.value })} /></label>

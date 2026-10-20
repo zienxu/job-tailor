@@ -5,11 +5,26 @@ import * as api from '../api'
 type Form = api.RoleFields & { id?: number; tmp?: number; bullets: string; editing?: boolean; orig?: Form }
 let nextTmp = 0 // stable React key for unsaved forms
 
-const FIELDS: [keyof api.RoleFields, string][] = [
-  ['company', 'Company'], ['title', 'Title'], ['start_date', 'Start date'], ['end_date', 'End date'],
-]
+const LABELS: Record<api.RoleKind, { heading: string; lede: string; company: string; title: string; bullets: string; add: string; noun: string }> = {
+  experience: {
+    heading: 'Experience', lede: 'Your roles and the bullets the tailor is allowed to cite.',
+    company: 'Company', title: 'Title', bullets: 'Bullets (one per line)', add: 'Add role', noun: 'role',
+  },
+  project: {
+    heading: 'Projects', lede: 'Your projects and the bullets the tailor is allowed to cite.',
+    company: 'Project', title: 'Subtitle', bullets: 'Bullets (one per line)', add: 'Add project', noun: 'project',
+  },
+  education: {
+    heading: 'Education', lede: 'Schools and degrees, copied to the resume as saved. Never sent to the tailor.',
+    company: 'School', title: 'Degree', bullets: 'Details (one per line)', add: 'Add education', noun: 'entry',
+  },
+}
 
-export default function Experience() {
+export default function Experience({ kind = 'experience' }: { kind?: api.RoleKind }) {
+  const L = LABELS[kind]
+  const FIELDS: [keyof api.RoleFields, string][] = [
+    ['company', L.company], ['title', L.title], ['start_date', 'Start date'], ['end_date', 'End date'],
+  ]
   const [forms, setForms] = useState<Form[]>([])
   const [bullets, setBullets] = useState<api.Bullet[]>([])
   const [error, setError] = useState('')
@@ -18,19 +33,19 @@ export default function Experience() {
   useEffect(() => {
     Promise.all([api.listRoles(), api.listBullets()]).then(([roles, bs]) => {
       setBullets(bs)
-      setForms(roles.map((r) => ({
+      setForms(roles.filter((r) => r.kind === kind).map((r) => ({
         ...r, bullets: bs.filter((b) => b.role_id === r.id).map((b) => b.text).join('\n'),
       })))
     }).catch((e) => setError(e.message))
-  }, [])
+  }, [kind])
 
   const edit = (i: number, patch: Partial<Form>) =>
     setForms((fs) => fs.map((f, j) => (j === i ? { ...f, ...patch } : f)))
 
   async function save(i: number) {
     const { id, bullets: text, company, title, start_date, end_date } = forms[i]
-    const fields = { company, title, start_date, end_date }
-    if (!company.trim() || !title.trim()) return setError('Company and title are required')
+    const fields = { company, title, start_date, end_date, kind }
+    if (!company.trim() || !title.trim()) return setError(`${L.company} and ${L.title.toLowerCase()} are required`)
     setSaving(true)
     setError('')
     let ok = false
@@ -63,7 +78,7 @@ export default function Experience() {
   async function remove(i: number) {
     const { id, company } = forms[i]
     if (id) {
-      if (!confirm(`Delete ${company || 'this role'} and all its bullets and stories?`)) return
+      if (!confirm(`Delete ${company || `this ${L.noun}`} and all its bullets and stories?`)) return
       try {
         await api.deleteRole(id)
       } catch (e) {
@@ -76,8 +91,8 @@ export default function Experience() {
   return (
     <section className="max-w-3xl">
       <header className="mb-8">
-        <h1 className="page-title">Experience</h1>
-        <p className="page-lede">Your roles and the bullets the tailor is allowed to cite.</p>
+        <h1 className="page-title">{L.heading}</h1>
+        <p className="page-lede">{L.lede}</p>
       </header>
       {error && <p role="alert" className="alert">{error}</p>}
       <div className="flex flex-col gap-5">
@@ -88,7 +103,7 @@ export default function Experience() {
                 <label key={k} className="label">{label}<input className="field" readOnly={!f.editing} value={f[k]} onChange={(e) => edit(i, { [k]: e.target.value })} /></label>
               ))}
             </div>
-            <label className="label mt-4">Bullets (one per line)
+            <label className="label mt-4">{L.bullets}
               <textarea className="field ruled font-serif" rows={6} readOnly={!f.editing} value={f.bullets} onChange={(e) => edit(i, { bullets: e.target.value })} />
             </label>
             <div className="mt-4 flex items-center justify-between gap-2">
@@ -103,8 +118,8 @@ export default function Experience() {
           </form>
         ))}
       </div>
-      <button className="btn btn-secondary mt-5" onClick={() => setForms((fs) => [...fs, { tmp: nextTmp++, company: '', title: '', start_date: '', end_date: '', bullets: '', editing: true }])}>
-        <Plus aria-hidden size={16} />Add role
+      <button className="btn btn-secondary mt-5" onClick={() => setForms((fs) => [...fs, { tmp: nextTmp++, company: '', title: '', start_date: '', end_date: '', kind, bullets: '', editing: true }])}>
+        <Plus aria-hidden size={16} />{L.add}
       </button>
     </section>
   )
