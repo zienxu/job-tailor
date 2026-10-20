@@ -162,3 +162,24 @@
 - Chose: flag label "Not in your saved text" (user's choice; a citation can be a story, so "saved bullet" was wrong there); the unparseable bullet gets `included: true`; the Editor treats a missing `included` as true; the Uncited group also gets the include checkbox (unticking takes it out of the review gate, like Remove); unticked textareas stay editable, only muted.
 - Rejected: "Not in your saved bullet" (spec draft wording); disabling unticked textareas like copied sections (the tick is a selection, not a lock).
 - Why: the review gate must still see any flagged bullet that would reach the user; fewer special cases in the Editor.
+
+## 2026-10-21 — Step 7c3 page fit
+- Chose: `/preview` returns JSON `{html, pages, shorten, remove}` and takes optional `job_id` (terms for removal) and `fallback` (texts of included fallback bullets, matched by text); shorten lists wrapped bullets only (a leadership role is one joined line, so one unit), found by matching each li's first words against pdfplumber text lines; the Editor shows the top 5 of each list; the download block is client-side; the Editor waits for both check and preview before opening the gate; `hits` moved to ats.py so tailor and page fit match terms the same way.
+- Rejected: all bullets in shorten (trimming a one-line bullet never saves a line); full lists in the UI (too long); a server-side page check on `/pdf` (a second Chromium render per download); per-bullet IDs in the resume payload (text match is enough for a suggestion).
+- Why: user's answers in planning; smallest change that keeps the payload shape. Review fixes: bullets are matched on their first 5 words and a wrapped bullet stops at the next bullet's first line; a failed check or preview fails closed (download blocked, retry by editing); `fallback` capped at 500 items.
+
+## 2026-10-21 — No dot before the school name
+- Chose: removed the education row's drawn dot (user request); the row keeps its 36pt indent, so text positions are unchanged.
+- Rejected: keeping it to match docs/layout-reference.pdf.
+- Why: the user doesn't want the university shown as a bullet point.
+- Also: the school row is no longer indented, so it lines up with experience company names (user request); test_pdf checks `[University]` against `[Company Name]` x and the reference height instead of the reference x.
+
+## 2026-10-21 — No bottom page margin
+- Chose: `@page` bottom margin 0 (was 28.8pt), at the user's request.
+- Rejected: adding the same bottom padding to the preview (the user wants the space used).
+- Why: the screen preview ignores `@page`, so a resume that filled the preview spilled onto page 2 of the PDF and the page-fit warning disagreed with what the user saw.
+
+## 2026-10-21 — Half margins, margins on body
+- Chose: side margins 14.4pt (was 28.8), header top pad 4.5pt (was 9), text stops 7.2pt before the section rules (was 14.4), at the user's request; margins moved from `@page` to body padding so the screen preview and the PDF wrap at the same width; test_pdf expects the reference positions shifted by those amounts.
+- Rejected: halving only `@page` (the preview would still have no margins and wrap wider than the PDF).
+- Why: before this, the preview ignored `@page`, so its lines were 57.6pt wider than the PDF's and the page-fit count disagreed with it.

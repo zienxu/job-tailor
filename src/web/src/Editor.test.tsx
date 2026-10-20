@@ -29,7 +29,7 @@ beforeEach(() => {
     { text: 'Invented claim', source_id: null, role_id: null, flags: ['missing_citation'] },
   ] })
   m.critique.mockResolvedValue(emptyCritique)
-  m.preview.mockResolvedValue('<p>preview</p>')
+  m.preview.mockResolvedValue({ html: '<p>preview</p>', pages: 1, shorten: [], remove: [] })
   // Stand-in for the backend: "kubernetes" is the one missing keyword, and "9" contradicts the source.
   m.check.mockImplementation(async (_id, text, bullets) => ({
     ats: { label: 'local estimate', score: text.includes('kubernetes') ? 100 : 50, matched: [], missing: [] },
@@ -224,4 +224,21 @@ test('only included bullets reach leadership rows and the "Copied as saved" note
     { name: 'Chess Club', role: 'President', dates: '', bullets: ['Led 20 members'] }]))
   const acme = screen.getByRole('heading', { name: 'Acme - Engineer' }).parentElement!
   expect(within(acme).queryByText('Copied as saved')).toBeNull()
+})
+
+test('over 1 page blocks download and shows shorten then remove suggestions', async () => {
+  m.preview.mockResolvedValue({
+    html: '<p>preview</p>', pages: 2,
+    shorten: [{ section: 'experience', role: 'Acme', text: 'Cut build time by 40%', words: 1 }],
+    remove: [{ section: 'leadership', role: 'Chess Club', text: 'Led 20 members' }],
+  })
+  const user = await tailored()
+  await user.click(screen.getByLabelText('Remove bullet 3'))
+  await user.click(screen.getByLabelText('Keep anyway'))
+  await user.click(screen.getByLabelText("I've reviewed this draft"))
+  expect(await screen.findByText(/runs to 2 pages/)).toBeInTheDocument()
+  expect(screen.getByText('Acme: Cut build time by 40% (last line 1 word)')).toBeInTheDocument()
+  expect(screen.getByText('Chess Club: Led 20 members')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Download PDF/ })).toBeDisabled()
+  expect(screen.getByLabelText('Bullet 1')).toHaveValue('Cut build time by 40%') // never auto-edits
 })

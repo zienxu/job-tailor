@@ -19,7 +19,7 @@
 {% elif s == 'education' and r.education %}
 <h2>Education</h2>
 {% for e in r.education %}
-<div class="row edu"><span class="dot top"></span><b>{{ e.school }} | {{ e.degree }}</b><span>{{ e.date }}</span></div>
+<div class="row"><b>{{ e.school }} | {{ e.degree }}</b><span>{{ e.date }}</span></div>
 <ul>{% for d in e.details %}<li>{{ d }}</li>{% endfor %}</ul>
 {% endfor %}
 {% elif s == 'experience' and r.experience %}

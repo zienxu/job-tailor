@@ -69,6 +69,7 @@ export default function Editor() {
   const [critic, setCritic] = useState<api.Critique | null>(null)
   const [criticLoading, setCriticLoading] = useState(false)
   const [html, setHtml] = useState('')
+  const [fit, setFit] = useState<api.Fit>({ pages: 1, shorten: [], remove: [] })
   const [reviewed, setReviewed] = useState(false)
   const [busy, setBusy] = useState(false)
   // True from an edit until its fact check returns, so the gate never trusts flags from an older draft.
@@ -108,13 +109,18 @@ export default function Editor() {
     let stale = false
     setChecking(true)
     const t = setTimeout(() => {
-      api.check(jobId, atsText(resume), bullets).then((r) => {
+      const fallback = bullets.filter((b) => b.included && b.fallback).map((b) => b.text)
+      // Both must return before the gate opens: flags and page count must come from this draft.
+      Promise.all([api.check(jobId, atsText(resume), bullets), api.preview(resume, jobId, fallback)]).then(([r, p]) => {
         if (stale) return
         setAts(r.ats)
-        setChecking(false)
         setBullets((bs) => bs.map((b, i) => ({ ...b, flags: r.flags[i] ?? b.flags })))
-      }).catch((e) => !stale && setError(e.message))
-      api.preview(resume).then((h) => !stale && setHtml(h)).catch((e) => !stale && setError(e.message))
+        const { html, ...f } = p
+        setHtml(html)
+        setFit(f)
+        setChecking(false)
+      // Fails closed: download stays blocked until an edit retries both.
+      }).catch((e) => !stale && setError(`Checking this draft failed, edit it to retry. ${e.message}`))
     }, 400)
     return () => { stale = true; clearTimeout(t) }
     // draftKey covers resume and bullet text; listing those objects would re-run on every render.
@@ -193,7 +199,8 @@ export default function Editor() {
   })
 
   const unresolved = bullets.filter((b) => b.included && b.flags.length > 0 && !b.kept).length
-  const canDownload = jobId !== null && unresolved === 0 && reviewed && !checking && !busy
+  const canDownload = jobId !== null && unresolved === 0 && reviewed && !checking && !busy && fit.pages <= 1
+  const clip = (t: string) => (t.length > 60 ? `${t.slice(0, 60)}...` : t)
 
   const groups = [
     ...roles.filter((r) => r.kind !== 'education').map((r) => ({ id: `role_${r.id}`, title: [r.company, r.title].filter(Boolean).join(' - '), dates: dates(r), cited: true })),
@@ -323,6 +330,23 @@ export default function Editor() {
               <p className="text-sm text-muted" aria-live="polite">
                 {unresolved > 0 ? `${unresolved} flagged bullet${unresolved > 1 ? 's' : ''} to fix, keep or remove.` : 'No unresolved flags.'}
               </p>
+              {fit.pages > 1 && (
+                <div role="status" className="rounded-lg border border-warn/50 bg-warn/10 p-3 text-sm">
+                  <p className="font-semibold text-warn">This resume runs to {fit.pages} pages. Download is blocked until it fits on 1.</p>
+                  {fit.shorten.length > 0 && (<>
+                    <p className="mt-2 font-medium">Shorten first</p>
+                    <ul className="list-disc pl-5">
+                      {fit.shorten.slice(0, 5).map((s, i) => <li key={i}>{s.role}: {clip(s.text)} (last line {s.words} word{s.words === 1 ? '' : 's'})</li>)}
+                    </ul>
+                  </>)}
+                  {fit.remove.length > 0 && (<>
+                    <p className="mt-2 font-medium">Then consider removing</p>
+                    <ul className="list-disc pl-5">
+                      {fit.remove.slice(0, 5).map((s, i) => <li key={i}>{s.role}: {clip(s.text)}</li>)}
+                    </ul>
+                  </>)}
+                </div>
+              )}
               <label className="inline-flex items-center gap-2 text-sm font-medium">
                 <input type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />
                 I've reviewed this draft

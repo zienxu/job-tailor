@@ -32,6 +32,8 @@ export type Draft = {
   name: string; contacts: string[]; summary: string; bullets: DraftBullet[]
   order?: SectionKey[]; education?: Education[]; skills?: LabelText[]
 }
+export type Suggestion = { section: string; role: string; text: string; words?: number }
+export type Fit = { pages: number; shorten: Suggestion[]; remove: Suggestion[] }
 export type Version = { id: number; job_id: number; content: Draft; created_at: string }
 
 async function send(method: string, path: string, body?: unknown): Promise<Response> {
@@ -76,7 +78,8 @@ export const tailor = (jobId: number) => req<{ bullets: DraftBullet[] }>('POST',
 export const check = (jobId: number, text: string, bullets: DraftBullet[]) =>
   req<{ ats: Ats; flags: string[][] }>('POST', `/jobs/${jobId}/check`, { text, bullets })
 export const critique = (jobId: number, bullets: DraftBullet[]) => req<Critique>('POST', `/jobs/${jobId}/critique`, { bullets })
-export const preview = async (resume: Resume) => (await send('POST', '/preview', { resume })).text()
+export const preview = (resume: Resume, jobId: number, fallback: string[]) =>
+  req<{ html: string } & Fit>('POST', '/preview', { resume, job_id: jobId, fallback })
 export const pdf = async (resume: Resume) => (await send('POST', '/pdf', { resume })).blob()
 export const saveVersion = (jobId: number, content: Draft) => req<Version>('POST', `/jobs/${jobId}/versions`, { content })
 export const latestVersion = () => req<Version | null>('GET', '/versions/latest')

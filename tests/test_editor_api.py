@@ -58,14 +58,21 @@ def test_critique_passes_through(seeded):
 
 
 def test_preview_has_name_and_summary(client):
-    html = client.post("/preview", json={"resume": {"name": "Jane Doe", "summary": "Backend engineer."}}).text
+    html = client.post("/preview", json={"resume": {"name": "Jane Doe", "summary": "Backend engineer."}}).json()["html"]
     assert "Jane Doe" in html and "Backend engineer." in html and "/api/templates/" in html
     assert client.get("/templates/resume.css").status_code == 200
 
 
 def test_preview_escapes_markup(client):
-    html = client.post("/preview", json={"resume": {"name": "<script>x</script>"}}).text
+    html = client.post("/preview", json={"resume": {"name": "<script>x</script>"}}).json()["html"]
     assert "<script>x" not in html
+
+
+def test_preview_returns_page_count(client):
+    job_id = client.post("/jobs", json={"text": "python"}).json()["id"]
+    out = client.post("/preview", json={"resume": {"name": "Jane"}, "job_id": job_id, "fallback": []}).json()
+    assert (out["pages"], out["shorten"], out["remove"]) == (1, [], [])
+    assert client.post("/preview", json={"resume": {}, "job_id": 999}).status_code == 404
 
 
 def test_bad_resume_is_422_without_echo(client):
@@ -105,7 +112,7 @@ def test_preview_renders_all_sections_in_order(client):
               "experience": [{"company": "Acme", "title": "Engineer", "bullets": ["Shipped X."]}],
               "education": [{"school": "NUS", "degree": "BComp", "date": "2025", "details": ["GPA 4.5"]}],
               "leadership": [{"name": "Chess Club", "role": "", "dates": "2023", "bullets": ["Led it."]}]}
-    html = client.post("/preview", json={"resume": resume}).text
+    html = client.post("/preview", json={"resume": resume}).json()["html"]
     pos = [html.index(f"<h2>{h}</h2>") for h in ("Skills", "Projects", "Experience", "Education", "Leadership", "Summary")]
     assert pos == sorted(pos)
     assert "<b>Languages:</b> Python" in html and "<li><b>Chess Club:</b> Led it.</li>" in html
@@ -129,7 +136,7 @@ def test_tailor_never_sends_or_falls_back_to_education(seeded):
 
 def test_zero_bullet_role_renders_header_only(client):
     html = client.post("/preview", json={"resume": {"experience": [
-        {"company": "Acme Corp", "title": "Engineer", "dates": "2020", "bullets": []}]}}).text
+        {"company": "Acme Corp", "title": "Engineer", "dates": "2020", "bullets": []}]}}).json()["html"]
     assert "Engineer" in html and "<li>" not in html.split("Acme Corp", 1)[1]
 
 
@@ -151,6 +158,6 @@ def test_leadership_renders_one_line_per_role(client):
     html = client.post("/preview", json={"resume": {"leadership": [
         {"name": "Chess Club", "role": "President", "dates": "2023", "bullets": ["a", "b"]},
         {"name": "Debate", "role": "Captain", "dates": "", "bullets": []},
-        {"name": "Drama", "role": "", "dates": "", "bullets": []}]}}).text
+        {"name": "Drama", "role": "", "dates": "", "bullets": []}]}}).json()["html"]
     assert "<li><b>Chess Club (President):</b> a b</li>" in html
     assert "<li><b>Debate (Captain)</b></li>" in html and "<li><b>Drama</b></li>" in html and "2023" not in html

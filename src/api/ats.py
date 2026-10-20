@@ -32,6 +32,12 @@ def extract_terms(job_text: str) -> list[str]:
     return list(dict.fromkeys(terms))
 
 
+def hits(terms: list[str], text: str) -> int:
+    """How many job terms appear in text, matched like score()."""
+    tokens = set(_tokens(text))
+    return sum(t in tokens for t in terms)
+
+
 def score(job_text: str, resume_text: str) -> dict:
     terms = extract_terms(job_text)
     resume_tokens = set(_tokens(resume_text))

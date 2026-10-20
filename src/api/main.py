@@ -6,9 +6,9 @@ from urllib.error import HTTPError
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 
 from src.api import ats, db, pdf
 from src.api.critic import critique
@@ -258,11 +258,16 @@ class Resume(BaseModel):
 
 class Render(BaseModel):
     resume: Resume
+    job_id: int | None = None
+    fallback: list[str] = Field([], max_length=500)  # texts of included fallback bullets, for the removal order
 
 
-@app.post("/preview", response_class=HTMLResponse)
-def preview(body: Render):
-    return pdf.render_html(body.resume.model_dump(), base=PREVIEW_BASE)
+@app.post("/preview")
+def preview(body: Render, conn=Depends(get_conn)):  # plain def: render_pdf uses sync Playwright
+    resume = body.resume.model_dump()
+    terms = ats.extract_terms(_get(conn, "jobs", body.job_id)["text"]) if body.job_id is not None else []
+    fit = pdf.page_fit(resume, pdf.render_pdf(resume), set(body.fallback), terms)
+    return {"html": pdf.render_html(resume, base=PREVIEW_BASE), **fit}
 
 
 @app.post("/pdf")
