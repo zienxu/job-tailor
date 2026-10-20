@@ -29,9 +29,12 @@
 <div><i>{{ x.title }}</i></div>
 {% if x.bullets %}<ul>{% for b in x.bullets %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
 {% endfor %}
-{% elif s in ('leadership', 'projects') and r[s] %}
-<h2>{{ s.title() }}</h2>
-{% for p in r[s] %}
+{% elif s == 'leadership' and r.leadership %}
+<h2>Leadership</h2>
+<ul>{% for p in r.leadership %}<li><b>{{ p.name }}{% if p.role %} ({{ p.role }}){% endif %}{% if p.bullets %}:{% endif %}</b>{% if p.bullets %} {{ p.bullets | join(' ') }}{% endif %}</li>{% endfor %}</ul>
+{% elif s == 'projects' and r.projects %}
+<h2>Projects</h2>
+{% for p in r.projects %}
 <div class="row"><b>{{ p.name }}</b><span>{{ p.dates }}</span></div>
 {% if p.role %}<div><i>{{ p.role }}</i></div>{% endif %}
 {% if p.bullets %}<ul>{% for b in p.bullets %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}

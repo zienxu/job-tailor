@@ -107,10 +107,10 @@ def test_preview_renders_all_sections_in_order(client):
     html = client.post("/preview", json={"resume": resume}).text
     pos = [html.index(f"<h2>{h}</h2>") for h in ("Skills", "Projects", "Experience", "Education", "Leadership", "Summary")]
     assert pos == sorted(pos)
-    assert "<b>Languages:</b> Python" in html and "<b>Chess Club</b>" in html and "<li>Led it.</li>" in html
-    # An empty role hides the italic subtitle line.
+    assert "<b>Languages:</b> Python" in html and "<li><b>Chess Club:</b> Led it.</li>" in html
+    # Leadership is one compact line per role: no subtitle, no dates.
     leadership = html.split("<h2>Leadership</h2>", 1)[1].split("<h2>", 1)[0]
-    assert "<i>" not in leadership
+    assert "<i>" not in leadership and "2023" not in leadership
     assert "<i>Course Project, NUS</i>" in html and "GPA 4.5" in html
     assert client.post("/preview", json={"resume": {"order": ["footer"]}}).status_code == 422
 
@@ -142,5 +142,14 @@ def test_uncited_leadership_role_gets_fallback_bullets(seeded):
         out = client.post(f"/jobs/{job_id}/tailor").json()
     assert "Chess Club" in mock.call_args.args[1]
     fallback = [b for b in out["bullets"] if b["fallback"]]
-    assert [b["text"] for b in fallback] == ["Led 20 members.", "Ran weekly sessions."]
+    assert [b["text"] for b in fallback] == ["Led 20 members.", "Ran weekly sessions.", "Booked venues."]
     assert all(b["flags"] == [] and b["role_id"] == f"role_{lead}" for b in fallback)
+
+
+def test_leadership_renders_one_line_per_role(client):
+    html = client.post("/preview", json={"resume": {"leadership": [
+        {"name": "Chess Club", "role": "President", "dates": "2023", "bullets": ["a", "b"]},
+        {"name": "Debate", "role": "Captain", "dates": "", "bullets": []},
+        {"name": "Drama", "role": "", "dates": "", "bullets": []}]}}).text
+    assert "<li><b>Chess Club (President):</b> a b</li>" in html
+    assert "<li><b>Debate (Captain)</b></li>" in html and "<li><b>Drama</b></li>" in html and "2023" not in html

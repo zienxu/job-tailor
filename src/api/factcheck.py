@@ -14,7 +14,7 @@ PROPER_NOUN_RE = re.compile(r"\b[A-Z][a-zA-Z]{2,}\b")
 def check_bullet(text: str, source_id: str | None, sources: dict[str, str]) -> list[str]:
     if not source_id:
         return ["missing_citation"]
-    if source_id not in sources:
+    if not isinstance(source_id, str) or source_id not in sources:
         return ["invalid_citation_id"]
 
     source_text = sources[source_id]

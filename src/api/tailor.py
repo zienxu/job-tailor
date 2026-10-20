@@ -12,8 +12,9 @@ from src.api.factcheck import check_bullet
 
 SYSTEM_PROMPT = (
     "You tailor a resume to a job description using ONLY the given source bullets "
-    "and stories. For every output bullet, pick the single most relevant source and "
-    "set source_id to its id exactly as given. Do not invent facts, numbers, "
+    "and stories. Write one tailored bullet for every saved bullet, with source_id set to "
+    "that bullet's id exactly as given; you may also add bullets drawn from a role's own "
+    "stories, citing the story id. Do not invent facts, numbers, "
     "companies, or titles not present in the cited source. "
     "Sources are grouped by role; write at least 1 bullet for every role. "
     'Respond with JSON only: {"bullets": [{"text": "...", "source_id": "..."}]}'
@@ -67,13 +68,10 @@ def tailor(job_text: str, profile: dict) -> dict:
         flags = check_bullet(text, source_id, sources)
         out.append({"text": text, "source_id": source_id, "flags": flags, "fallback": False})
 
-    # Keep every role: an uncited role gets its first 2 saved bullets (already in position order), unchanged.
-    role_of = {s["id"]: s["role_id"] for s in stripped.get("bullets", []) + stripped.get("stories", [])}
-    covered = {role_of.get(b["source_id"]) for b in out if isinstance(b["source_id"], str)}
+    # Keep every saved bullet: any the LLM did not cite is added unchanged, by role then position.
+    cited = {b["source_id"] for b in out if isinstance(b["source_id"], str)}
     for r in stripped.get("roles", []):
-        if r["id"] in covered:
-            continue
-        for b in [b for b in stripped.get("bullets", []) if b["role_id"] == r["id"]][:2]:
+        for b in [b for b in stripped.get("bullets", []) if b["role_id"] == r["id"] and b["id"] not in cited]:
             out.append({"text": b["text"], "source_id": b["id"],
                         "flags": check_bullet(b["text"], b["id"], sources), "fallback": True})
     return {"contacts": contacts, "bullets": out}

@@ -120,7 +120,7 @@ def test_live_groq_tailors_dummy_profile():
     assert result["contacts"] == dummy_profile["contacts"]
 
 
-def test_uncited_role_gets_first_two_saved_bullets_as_fallback():
+def test_every_uncited_saved_bullet_is_added_as_fallback():
     with patch("src.api.tailor.llm.complete", return_value=mock_response([
         {"text": "Led a team of 5 engineers to ship the checkout redesign at Acme Corp.",
          "source_id": "bullet_1"},
@@ -129,17 +129,38 @@ def test_uncited_role_gets_first_two_saved_bullets_as_fallback():
     first, *fallback = result["bullets"]
     assert first["fallback"] is False
     saved = {b["id"]: b["text"] for b in PROFILE["bullets"]}
-    assert [(b["source_id"], b["text"]) for b in fallback] == [
-        ("bullet_4", saved["bullet_4"]), ("bullet_5", saved["bullet_5"])]
+    want = [f"bullet_{i}" for i in (2, 3, 7, 9, 4, 5, 6, 8, 10)]
+    assert [(b["source_id"], b["text"]) for b in fallback] == [(i, saved[i]) for i in want]
     assert all(b["fallback"] and b["flags"] == [] for b in fallback)
+
+
+def test_partly_cited_role_keeps_rest_in_order_and_uncited_role_keeps_all():
+    profile = {"roles": [{"id": "a", "company": "A", "title": "T"}, {"id": "b", "company": "B", "title": "T"}],
+               "bullets": [{"id": f"a{i}", "role_id": "a", "text": f"Did A thing {i}."} for i in range(3)]
+               + [{"id": f"b{i}", "role_id": "b", "text": f"Did B thing {i}."} for i in range(4)],
+               "stories": []}
+    with patch("src.api.tailor.llm.complete", return_value=mock_response([
+        {"text": "Did A thing 1.", "source_id": "a1"}])):
+        result = tailor(JOB_TEXT, profile)
+    fallback = [b for b in result["bullets"] if b["fallback"]]
+    assert [b["source_id"] for b in fallback] == ["a0", "a2", "b0", "b1", "b2", "b3"]
+    assert all(b["flags"] == [] for b in fallback)
 
 
 def test_prompt_groups_sources_by_role_and_asks_to_cover_every_role():
     with patch("src.api.tailor.llm.complete", return_value=mock_response([])) as mock:
         tailor(JOB_TEXT, PROFILE)
     system, user = mock.call_args.args
-    assert "every role" in system
+    assert "every role" in system and "every saved bullet" in system
     roles = json.loads(user)["roles"]
     assert [r["id"] for r in roles] == ["role_1", "role_2"]
     assert "bullet_4" in roles[1]["sources"] and "bullet_4" not in roles[0]["sources"]
     assert "story_1" in roles[0]["sources"]
+
+
+def test_non_string_source_id_is_flagged_not_a_crash():
+    with patch("src.api.tailor.llm.complete", return_value=mock_response([
+        {"text": "Shipped it.", "source_id": ["bullet_1"]}])):
+        result = tailor(JOB_TEXT, PROFILE)
+    assert result["bullets"][0]["flags"]
+    assert "bullet_1" in [b["source_id"] for b in result["bullets"] if b["fallback"]]
