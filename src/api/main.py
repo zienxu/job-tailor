@@ -51,6 +51,10 @@ class Item(BaseModel):
     text: NonBlank
 
 
+class Bullet(Item):
+    position: int = None  # omitted -> a DB trigger sets it to the id; an explicit null is rejected
+
+
 class Entry(BaseModel):
     section: Literal["leadership", "skills"]
     label: NonBlank
@@ -84,8 +88,13 @@ def _write(conn, sql: str, params) -> sqlite3.Cursor:
     return cur
 
 
+# Rows only swap within their own list: same role kind, same bullet role, same entry section.
+GROUP = {"roles": "kind", "bullets": "role_id", "entries": "section"}
+
+
 def _crud(table: str, Model: type[BaseModel]) -> None:
     cols = list(Model.model_fields)
+    order = "position, id" if table in db.ORDERED else "id"
 
     @app.post(f"/{table}", status_code=201)
     def create(body: Model, conn=Depends(get_conn)):
@@ -95,7 +104,7 @@ def _crud(table: str, Model: type[BaseModel]) -> None:
 
     @app.get(f"/{table}")
     def list_all(conn=Depends(get_conn)):
-        return [dict(r) for r in conn.execute(f"SELECT * FROM {table} ORDER BY id")]
+        return [dict(r) for r in conn.execute(f"SELECT * FROM {table} ORDER BY {order}")]
 
     @app.get(f"/{table}/{{id}}")
     def get_one(id: int, conn=Depends(get_conn)):
@@ -115,9 +124,22 @@ def _crud(table: str, Model: type[BaseModel]) -> None:
         _get(conn, table, id)
         _write(conn, f"DELETE FROM {table} WHERE id = ?", (id,))
 
+    if table not in db.ORDERED:
+        return
+
+    @app.post(f"/{table}/{{a}}/swap/{{b}}", status_code=204)
+    def swap(a: int, b: int, conn=Depends(get_conn)):
+        conn.execute("BEGIN IMMEDIATE")  # take the write lock before reading, so overlapping swaps can't both read old positions
+        ra, rb = _get(conn, table, a), _get(conn, table, b)
+        if ra[GROUP[table]] != rb[GROUP[table]]:
+            raise HTTPException(422, f"{table} {a} and {b} are in different {GROUP[table]}s")
+        conn.execute(f"UPDATE {table} SET position = ? WHERE id = ?", (rb["position"], a))
+        conn.execute(f"UPDATE {table} SET position = ? WHERE id = ?", (ra["position"], b))
+        conn.commit()  # one commit: both positions change or neither
+
 
 _crud("roles", Role)
-_crud("bullets", Item)
+_crud("bullets", Bullet)
 _crud("stories", Item)
 _crud("entries", Entry)
 

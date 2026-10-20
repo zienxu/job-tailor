@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { ArrowDown, ArrowUp, Plus } from 'lucide-react'
 import * as api from '../api'
 
 type Form = { id?: number; tmp?: number; label: string; text: string; editing?: boolean; orig?: Form }
@@ -45,6 +45,15 @@ export default function Entries({ section }: { section: api.Section }) {
     setForms((fs) => fs.map((x, j) => (j === i ? { ...(f.orig ?? f), editing: false, orig: undefined } : x)))
   }
 
+  async function move(i: number, d: -1 | 1) {
+    try {
+      await api.swapEntries(forms[i].id!, forms[i + d].id!)
+    } catch (e) {
+      return setError((e as Error).message)
+    }
+    setForms((fs) => fs.map((f, j) => (j === i ? fs[i + d] : j === i + d ? fs[i] : f)))
+  }
+
   async function remove(i: number) {
     const { id } = forms[i]
     try {
@@ -70,6 +79,8 @@ export default function Entries({ section }: { section: api.Section }) {
             <div className="mt-4 flex items-center justify-between gap-2">
               <button type="button" className="btn btn-quiet" disabled={!f.editing} onClick={() => remove(i)}>Delete</button>
               <div className="flex gap-2">
+                <button type="button" className="btn btn-quiet" aria-label="Move up" disabled={!f.id || !forms[i - 1]?.id} onClick={() => move(i, -1)}><ArrowUp aria-hidden size={16} /></button>
+                <button type="button" className="btn btn-quiet" aria-label="Move down" disabled={!f.id || !forms[i + 1]?.id} onClick={() => move(i, 1)}><ArrowDown aria-hidden size={16} /></button>
                 {f.editing
                   ? <button type="button" className="btn btn-secondary" onClick={() => cancel(i)}>Cancel</button>
                   : <button type="button" className="btn btn-secondary" onClick={() => edit(i, { editing: true, orig: f })}>Edit</button>}

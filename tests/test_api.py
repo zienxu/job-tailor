@@ -142,3 +142,58 @@ def test_old_db_without_kind_migrates(client):
     old.commit()
     old.close()
     assert [r["kind"] for r in client.get("/roles").json()] == ["experience"]
+
+
+@pytest.mark.parametrize("table,body", [
+    ("roles", lambda i: {"company": f"C{i}", "title": "T"}),
+    ("entries", lambda i: {"section": "skills", "label": f"L{i}", "text": "x"}),
+])
+def test_swap_changes_order(client, table, body):
+    ids = [client.post(f"/{table}", json=body(i)).json()["id"] for i in range(3)]
+    assert [r["position"] for r in client.get(f"/{table}").json()] == ids  # initial position = id
+    assert client.post(f"/{table}/{ids[0]}/swap/{ids[2]}").status_code == 204
+    assert [r["id"] for r in client.get(f"/{table}").json()] == [ids[2], ids[1], ids[0]]
+    assert client.post(f"/{table}/{ids[0]}/swap/999").status_code == 404
+
+
+@pytest.mark.parametrize("table,x,y", [
+    ("roles", {"company": "Acme", "title": "SWE"}, {"company": "NUS", "title": "BComp", "kind": "education"}),
+    ("entries", {"section": "skills", "label": "L", "text": "x"}, {"section": "leadership", "label": "P", "text": "y"}),
+])
+def test_swap_across_groups_rejected(client, table, x, y):
+    a, b = (client.post(f"/{table}", json=body).json() for body in (x, y))
+    assert client.post(f"/{table}/{a['id']}/swap/{b['id']}").status_code == 422
+    assert [r["position"] for r in client.get(f"/{table}").json()] == [a["position"], b["position"]]
+
+
+def test_bullet_reorder_keeps_ids(client):
+    role_id = client.post("/roles", json={"company": "Acme", "title": "SWE"}).json()["id"]
+    a = client.post("/bullets", json={"role_id": role_id, "text": "A"}).json()["id"]
+    b = client.post("/bullets", json={"role_id": role_id, "text": "B"}).json()["id"]
+    client.put(f"/bullets/{b}", json={"role_id": role_id, "text": "B", "position": 0})
+    client.put(f"/bullets/{a}", json={"role_id": role_id, "text": "A", "position": 1})
+    assert [(x["id"], x["text"]) for x in client.get("/bullets").json()] == [(b, "B"), (a, "A")]
+    assert client.put(f"/bullets/{a}", json={"role_id": role_id, "text": "A", "position": None}).status_code == 422
+    with closing(db.connect()) as conn:
+        assert [x["id"] for x in db.load_profile(conn)["bullets"]] == [f"bullet_{b}", f"bullet_{a}"]
+
+
+def test_old_db_without_position_migrates(client):
+    old = sqlite3.connect(db.DB_PATH)
+    old.executescript("""
+        CREATE TABLE roles (id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT NOT NULL, title TEXT NOT NULL,
+            start_date TEXT NOT NULL DEFAULT '', end_date TEXT NOT NULL DEFAULT '',
+            kind TEXT NOT NULL DEFAULT 'experience');
+        CREATE TABLE bullets (id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role_id INTEGER NOT NULL REFERENCES roles(id) ON DELETE CASCADE, text TEXT NOT NULL);
+        CREATE TABLE entries (id INTEGER PRIMARY KEY AUTOINCREMENT, section TEXT NOT NULL,
+            label TEXT NOT NULL, text TEXT NOT NULL);
+        INSERT INTO roles (company, title) VALUES ('Acme', 'SWE'), ('Beta', 'SWE');
+        INSERT INTO bullets (role_id, text) VALUES (1, 'A');
+        INSERT INTO entries (section, label, text) VALUES ('skills', 'L', 'x');
+    """)
+    old.close()
+    for table in ("roles", "bullets", "entries"):
+        assert all(r["position"] == r["id"] for r in client.get(f"/{table}").json())
+    new = client.post("/roles", json={"company": "Gamma", "title": "SWE"}).json()
+    assert new["position"] == new["id"] == 3

@@ -16,7 +16,7 @@ beforeEach(() => {
     { id: 2, company: 'Tailor App', title: 'Course Project, NUS', start_date: '2024', end_date: '', kind: 'project' as const },
     { id: 3, company: 'NUS', title: 'BComp', start_date: '', end_date: '2025', kind: 'education' as const },
   ])
-  m.listBullets.mockResolvedValue([{ id: 9, role_id: 3, text: 'GPA 4.5' }])
+  m.listBullets.mockResolvedValue([{ id: 9, role_id: 3, text: 'GPA 4.5', position: 9 }])
   m.listEntries.mockResolvedValue([
     { id: 1, section: 'leadership', label: 'Chess Club', text: 'Led 20 members' },
     { id: 2, section: 'skills', label: 'Languages', text: 'Python' },

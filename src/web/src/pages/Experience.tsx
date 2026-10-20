@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { ArrowDown, ArrowUp, Plus } from 'lucide-react'
 import * as api from '../api'
 
 type Form = api.RoleFields & { id?: number; tmp?: number; bullets: string; editing?: boolean; orig?: Form }
@@ -53,11 +53,16 @@ export default function Experience({ kind = 'experience' }: { kind?: api.RoleKin
       const role = id ? await api.updateRole(id, fields) : await api.createRole(fields)
       edit(i, { id: role.id })
       // Match by text so unchanged bullets keep the IDs the tailor cites; an edited line is a new bullet.
-      const lines = new Set(text.split('\n').map((l) => l.trim()).filter(Boolean))
+      // Line order is bullet order: each bullet's position is its line index.
+      const lines = [...new Set(text.split('\n').map((l) => l.trim()).filter(Boolean))]
       const old = bullets.filter((b) => b.role_id === role.id)
-      const oldTexts = new Set(old.map((b) => b.text))
-      for (const b of old) if (!lines.has(b.text)) await api.deleteBullet(b.id)
-      for (const t of lines) if (!oldTexts.has(t)) await api.createBullet({ role_id: role.id, text: t })
+      const byText = new Map(old.map((b) => [b.text, b]))
+      for (const b of old) if (!lines.includes(b.text)) await api.deleteBullet(b.id)
+      for (const [position, t] of lines.entries()) {
+        const b = byText.get(t)
+        if (!b) await api.createBullet({ role_id: role.id, text: t, position })
+        else if (b.position !== position) await api.updateBullet(b.id, { role_id: role.id, text: t, position })
+      }
       ok = true
     } catch (e) {
       setError((e as Error).message)
@@ -73,6 +78,15 @@ export default function Experience({ kind = 'experience' }: { kind?: api.RoleKin
     setError('')
     if (!f.id) return setForms((fs) => fs.filter((_, j) => j !== i))
     setForms((fs) => fs.map((x, j) => (j === i ? { ...(f.orig ?? f), editing: false, orig: undefined } : x)))
+  }
+
+  async function move(i: number, d: -1 | 1) {
+    try {
+      await api.swapRoles(forms[i].id!, forms[i + d].id!)
+    } catch (e) {
+      return setError((e as Error).message)
+    }
+    setForms((fs) => fs.map((f, j) => (j === i ? fs[i + d] : j === i + d ? fs[i] : f)))
   }
 
   async function remove(i: number) {
@@ -109,6 +123,10 @@ export default function Experience({ kind = 'experience' }: { kind?: api.RoleKin
             <div className="mt-4 flex items-center justify-between gap-2">
               <button type="button" className="btn btn-quiet" disabled={!f.editing} onClick={() => remove(i)}>Delete</button>
               <div className="flex gap-2">
+                {kind !== 'education' && <> {/* education keeps creation order */}
+                  <button type="button" className="btn btn-quiet" aria-label="Move up" disabled={!f.id || !forms[i - 1]?.id} onClick={() => move(i, -1)}><ArrowUp aria-hidden size={16} /></button>
+                  <button type="button" className="btn btn-quiet" aria-label="Move down" disabled={!f.id || !forms[i + 1]?.id} onClick={() => move(i, 1)}><ArrowDown aria-hidden size={16} /></button>
+                </>}
                 {f.editing
                   ? <button type="button" className="btn btn-secondary" onClick={() => cancel(i)}>Cancel</button>
                   : <button type="button" className="btn btn-secondary" onClick={() => edit(i, { editing: true, orig: f })}>Edit</button>}

@@ -2,7 +2,7 @@ export type RoleKind = 'experience' | 'project' | 'education'
 export type RoleFields = { company: string; title: string; start_date: string; end_date: string; kind: RoleKind }
 export type Role = RoleFields & { id: number }
 export type ItemFields = { role_id: number; text: string }
-export type Bullet = ItemFields & { id: number }
+export type Bullet = ItemFields & { id: number; position: number }
 export type Story = ItemFields & { id: number }
 export type Section = 'leadership' | 'skills'
 export type EntryFields = { section: Section; label: string; text: string }
@@ -52,9 +52,11 @@ export const listRoles = () => req<Role[]>('GET', '/roles')
 export const createRole = (r: RoleFields) => req<Role>('POST', '/roles', r)
 export const updateRole = (id: number, r: RoleFields) => req<Role>('PUT', `/roles/${id}`, r)
 export const deleteRole = (id: number) => req<void>('DELETE', `/roles/${id}`)
+export const swapRoles = (a: number, b: number) => req<void>('POST', `/roles/${a}/swap/${b}`)
 
 export const listBullets = () => req<Bullet[]>('GET', '/bullets')
-export const createBullet = (b: ItemFields) => req<Bullet>('POST', '/bullets', b)
+export const createBullet = (b: ItemFields & { position?: number }) => req<Bullet>('POST', '/bullets', b)
+export const updateBullet = (id: number, b: ItemFields & { position: number }) => req<Bullet>('PUT', `/bullets/${id}`, b)
 export const deleteBullet = (id: number) => req<void>('DELETE', `/bullets/${id}`)
 
 export const listStories = () => req<Story[]>('GET', '/stories')
@@ -66,6 +68,7 @@ export const listEntries = () => req<Entry[]>('GET', '/entries')
 export const createEntry = (e: EntryFields) => req<Entry>('POST', '/entries', e)
 export const updateEntry = (id: number, e: EntryFields) => req<Entry>('PUT', `/entries/${id}`, e)
 export const deleteEntry = (id: number) => req<void>('DELETE', `/entries/${id}`)
+export const swapEntries = (a: number, b: number) => req<void>('POST', `/entries/${a}/swap/${b}`)
 
 export const createJob = (text: string) => req<Job>('POST', '/jobs', { text })
 export const tailor = (jobId: number) => req<{ bullets: DraftBullet[] }>('POST', `/jobs/${jobId}/tailor`)

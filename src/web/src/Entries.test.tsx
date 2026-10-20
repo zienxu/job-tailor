@@ -51,3 +51,19 @@ test('an entry needs a label and text', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Label and text are required')
   expect(m.createEntry).not.toHaveBeenCalled()
 })
+
+test('up/down on a skills entry swaps it with its neighbour', async () => {
+  m.listEntries.mockResolvedValue([
+    { id: 1, section: 'skills', label: 'Languages', text: 'Python' },
+    { id: 2, section: 'skills', label: 'Tools', text: 'Git' },
+  ])
+  const user = userEvent.setup()
+  render(<Entries section="skills" />)
+
+  await screen.findByDisplayValue('Tools')
+  expect(screen.getAllByLabelText('Move down')[1]).toBeDisabled()
+  await user.click(screen.getAllByLabelText('Move up')[1])
+
+  await waitFor(() => expect(m.swapEntries).toHaveBeenCalledWith(2, 1))
+  await waitFor(() => expect(screen.getAllByLabelText('Label').map((e) => (e as HTMLInputElement).value)).toEqual(['Tools', 'Languages']))
+})
