@@ -82,7 +82,7 @@ def _terms(job_text: str) -> dict[str, tuple[str, int]]:
 
 def _keys(text: str) -> set[str]:
     keys = set()
-    for seg in SEGMENT_RE.split(text):
+    for seg in SEGMENT_RE.split(text.replace("**", "")):
         stems = [_stem(t) for t in _tokens(seg)]
         keys.update(stems)
         keys.update(f"{a} {b}" for a, b in zip(stems, stems[1:]))

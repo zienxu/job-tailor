@@ -1,16 +1,47 @@
 """Render a resume dict to HTML (for preview) and to a PDF via Playwright."""
 import io
+import re
 import tempfile
 from pathlib import Path
 
 import pdfplumber
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from markupsafe import Markup, escape
 from playwright.sync_api import sync_playwright
 
 from src.api.ats import hits
 
 TEMPLATES = Path(__file__).parent / "templates"
 _env = Environment(loader=FileSystemLoader(TEMPLATES), autoescape=select_autoescape())
+
+
+def bold(s) -> Markup:
+    """Escape first, then turn **x** into <b>x</b>, so typed markup can never become live HTML."""
+    return Markup(re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", str(escape(s))))
+
+
+EMAIL_RE = re.compile(r"[^\s@]+@[^\s@]+\.[A-Za-z]{2,}")
+# Domain-like = a scheme, "www.", a /path, or a common TLD, so "Node.js" or "B.Sc" stay plain text.
+TLDS = "com|org|net|io|dev|me|sg|co|ai|app|edu|gov|info|page|xyz|tech"
+URL_RE = re.compile(rf"https?://\S+|www\.\S+|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{{2,}}/\S*|[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:{TLDS})", re.I)
+PHONE_RE = re.compile(r"\+?[\d\s().-]{7,}")
+YEARS_RE = re.compile(r"(?:19|20)\d\d\s*[-–]\s*(?:19|20)\d\d")  # "2020-2024" is a date range, not a phone
+
+
+def link(line) -> Markup:
+    """One contact line -> mailto:/tel:/https link with the text exactly as typed; anything else stays plain."""
+    text = str(line).strip()
+    href = None
+    if EMAIL_RE.fullmatch(text):
+        href = "mailto:" + text
+    elif URL_RE.fullmatch(text):
+        href = text if re.match(r"https?://", text, re.I) else "https://" + text
+    elif PHONE_RE.fullmatch(text) and not YEARS_RE.fullmatch(text) and sum(c.isdigit() for c in text) >= 7:
+        href = "tel:" + re.sub(r"[^\d+]", "", text)
+    return Markup('<a href="{}">{}</a>').format(href, text) if href else escape(text)
+
+
+_env.filters.update(bold=bold, link=link)
 # Default section order = the layout-reference.pdf order. The header always comes first.
 ORDER = ["summary", "education", "experience", "leadership", "projects", "skills"]
 
@@ -50,10 +81,10 @@ def _lis(resume: dict) -> list[dict]:
     out = []
     for s, role, r in _rows(resume):
         if s != "leadership":
-            out += [{"section": s, "role": role, "text": b} for b in r["bullets"]]
+            out += [{"section": s, "role": role, "text": b.replace("**", "")} for b in r["bullets"]]
         elif r["bullets"]:
             label = role + (f" ({r['role']})" if r["role"] else "")
-            out.append({"section": s, "role": role, "text": f"{label}: " + " ".join(r["bullets"])})
+            out.append({"section": s, "role": role, "text": f"{label}: " + " ".join(r["bullets"]).replace("**", "")})
     return out
 
 

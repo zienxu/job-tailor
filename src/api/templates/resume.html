@@ -9,39 +9,39 @@
 <body>
 <header>
   <h1>{{ r.name }}</h1>
-  <p class="contacts">{% for c in r.contacts %}{% if not loop.first %}<span class="dot sep"></span>{% endif %}{{ c }}{% endfor %}</p>
+  <p class="contacts">{% for c in r.contacts %}{% if not loop.first %}<span class="dot sep"></span>{% endif %}{{ c | link }}{% endfor %}</p>
 </header>
 
 {% for s in order %}
 {% if s == 'summary' and r.summary %}
 <h2>Summary</h2>
-<p>{{ r.summary }}</p>
+<p>{{ r.summary | bold }}</p>
 {% elif s == 'education' and r.education %}
 <h2>Education</h2>
 {% for e in r.education %}
 <div class="row"><b>{{ e.school }} | {{ e.degree }}</b><span>{{ e.date }}</span></div>
-<ul>{% for d in e.details %}<li>{{ d }}</li>{% endfor %}</ul>
+<ul>{% for d in e.details %}<li>{{ d | bold }}</li>{% endfor %}</ul>
 {% endfor %}
 {% elif s == 'experience' and r.experience %}
 <h2>Experience</h2>
 {% for x in r.experience %}
 <div class="row"><b>{{ x.company }}</b><span>{{ x.dates }}</span></div>
 <div><i>{{ x.title }}</i></div>
-{% if x.bullets %}<ul>{% for b in x.bullets %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
+{% if x.bullets %}<ul>{% for b in x.bullets %}<li>{{ b | bold }}</li>{% endfor %}</ul>{% endif %}
 {% endfor %}
 {% elif s == 'leadership' and r.leadership %}
 <h2>Leadership</h2>
-<ul>{% for p in r.leadership %}<li><b>{{ p.name }}{% if p.role %} ({{ p.role }}){% endif %}{% if p.bullets %}:{% endif %}</b>{% if p.bullets %} {{ p.bullets | join(' ') }}{% endif %}</li>{% endfor %}</ul>
+<ul>{% for p in r.leadership %}<li><b>{{ p.name }}{% if p.role %} ({{ p.role }}){% endif %}{% if p.bullets %}:{% endif %}</b>{% if p.bullets %} {{ p.bullets | map('bold') | join(' ') }}{% endif %}</li>{% endfor %}</ul>
 {% elif s == 'projects' and r.projects %}
 <h2>Projects</h2>
 {% for p in r.projects %}
 <div class="row"><b>{{ p.name }}</b><span>{{ p.dates }}</span></div>
 {% if p.role %}<div><i>{{ p.role }}</i></div>{% endif %}
-{% if p.bullets %}<ul>{% for b in p.bullets %}<li>{{ b }}</li>{% endfor %}</ul>{% endif %}
+{% if p.bullets %}<ul>{% for b in p.bullets %}<li>{{ b | bold }}</li>{% endfor %}</ul>{% endif %}
 {% endfor %}
 {% elif s == 'skills' and r.skills %}
 <h2>Skills</h2>
-<ul>{% for k in r.skills %}<li><b>{{ k.label.rstrip(':') }}:</b> {{ k.text }}</li>{% endfor %}</ul>
+<ul>{% for k in r.skills %}<li><b>{{ k.label.rstrip(':') }}:</b> {{ k.text | bold }}</li>{% endfor %}</ul>
 {% endif %}
 {% endfor %}
 </body>

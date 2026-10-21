@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Download, Maximize2, Sparkles, TriangleAlert, Unlin
 import * as api from '../api'
 import CriticPanel from '../components/CriticPanel'
 import ScorePanel from '../components/ScorePanel'
+import BoldTextarea from '../components/BoldTextarea'
 
 type Bullet = api.DraftBullet & { key: number; kept?: boolean; included: boolean }
 // Education and skills are copied as saved, never sent to the LLM; edits here stay in this draft.
@@ -221,7 +222,7 @@ export default function Editor() {
       <li key={b.key} className={`flex flex-col gap-2 ${b.included ? '' : 'opacity-60'}`}>
         <div className="flex items-start gap-2">
           <input type="checkbox" className="mt-3" aria-label={`Include bullet ${n}`} checked={b.included} onChange={(e) => editBullet(b.key, { included: e.target.checked })} />
-          <textarea
+          <BoldTextarea
             aria-label={`Bullet ${n}`}
             className="field font-serif leading-relaxed"
             rows={2}
@@ -277,7 +278,7 @@ export default function Editor() {
           <div className="record flex flex-col gap-4">
             <label className="label">Name<input className="field" value={name} onChange={(e) => setName(e.target.value)} /></label>
             <label className="label">Contacts (one per line)<textarea className="field" rows={3} value={contacts} onChange={(e) => setContacts(e.target.value)} /></label>
-            <label className="label">Summary<textarea className="field font-serif leading-relaxed" rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} /></label>
+            <label className="label">Summary<BoldTextarea className="field font-serif leading-relaxed" rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} /></label>
           </div>
           <div className="record">
             <h2 className="font-serif text-lg font-semibold">Section order</h2>
@@ -308,7 +309,7 @@ export default function Editor() {
                         <input type="checkbox" checked={e.on} onChange={(ev) => editExtra(e.key, { on: ev.target.checked })} />
                         Include {e.label}{e.sub && ` | ${e.sub}`}
                       </label>
-                      <textarea
+                      <BoldTextarea
                         aria-label={sec === 'education' ? `${e.label} details` : `${e.label} text`}
                         className="field font-serif leading-relaxed"
                         rows={2}
@@ -350,7 +351,7 @@ export default function Editor() {
                   {fit.remove.length > 0 && (<>
                     <p className="mt-2 font-medium">Then consider removing</p>
                     <ul className="list-disc pl-5">
-                      {fit.remove.slice(0, 5).map((s, i) => <li key={i}>{s.role}: {clip(s.text)}</li>)}
+                      {fit.remove.slice(0, 5).map((s, i) => <li key={i}>{s.role}: {clip(s.text.replaceAll('**', ''))}</li>)}
                     </ul>
                   </>)}
                 </div>

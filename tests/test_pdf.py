@@ -7,7 +7,7 @@ import pdfplumber
 import pytest
 from playwright.sync_api import Error as PlaywrightError
 
-from src.api.pdf import page_fit, removal, render_html, render_pdf
+from src.api.pdf import link, page_fit, removal, render_html, render_pdf
 
 ROOT = Path(__file__).parent.parent
 REFERENCE = ROOT / "docs" / "layout-reference.pdf"
@@ -158,3 +158,35 @@ def test_removal_order_fallback_first_bottom_role_first_then_fewest_hits():
         ("Tailor", "python"), ("Acme", "python go docker")]
     assert all(u["text"] for u in out)  # never a header
 
+
+
+def test_bold_marks_up_after_escaping():
+    html = render_html({**RESUME, "summary": "A **bold** <script>x</script> and <b>typed</b>",
+                        "skills": [{"label": "L", "text": "**s**"}],
+                        "leadership": [{"name": "Org", "role": "", "dates": "", "bullets": ["**a**", "b"]}]})
+    assert "A <b>bold</b> &lt;script&gt;x&lt;/script&gt; and &lt;b&gt;typed&lt;/b&gt;" in html
+    assert "<b>s</b>" in html and "<b>a</b> b" in html
+
+
+@pytest.mark.parametrize("line,href", [
+    ("me@x.com", "mailto:me@x.com"),
+    ("+65 9123 4567", "tel:+6591234567"),
+    ("linkedin.com/in/me", "https://linkedin.com/in/me"),
+    ("http://github.com/me", "http://github.com/me"),
+    ("Singapore", None),
+    ("www.me.dev", "https://www.me.dev"),
+    ("2020-2024", None),
+    ("Node.js", None),
+    ("B.Sc", None),
+    ("javascript:alert(1)", None),
+])
+def test_contact_links(line, href):
+    out = str(link(line))
+    assert (f'<a href="{href}">{line}</a>' == out) if href else ("<a" not in out and out == line)
+
+
+def test_markers_do_not_change_pdf_length():
+    marked = {**RESUME, "summary": "**Bold** summary"}
+    with pdfplumber.open(io.BytesIO(render_pdf(marked))) as pdf:
+        assert len(pdf.pages) == 1
+        assert "**" not in pdf.pages[0].extract_text()

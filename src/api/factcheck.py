@@ -17,7 +17,8 @@ def check_bullet(text: str, source_id: str | None, sources: dict[str, str]) -> l
     if not isinstance(source_id, str) or source_id not in sources:
         return ["invalid_citation_id"]
 
-    source_text = sources[source_id]
+    text = text.replace("**", "")  # bold markers are formatting, not content
+    source_text = sources[source_id].replace("**", "")
     source_lower = source_text.lower()
 
     for n in NUMBER_RE.findall(text):

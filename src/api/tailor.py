@@ -18,6 +18,7 @@ SYSTEM_PROMPT = (
     "Set source_id to the cited bullet's id exactly as given; you may also write bullets "
     "drawn from a role's own stories, citing the story id. Do not invent facts, numbers, "
     "companies, or titles not present in the cited source. "
+    "Sources may mark bold with **double asterisks**; keep the ** around the same words where they survive in your bullet. "
     'Respond with JSON only: {"bullets": [{"text": "...", "source_id": "..."}]}'
 )
 

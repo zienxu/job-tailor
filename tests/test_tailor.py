@@ -208,3 +208,16 @@ def test_uncited_llm_bullet_stays_included_and_flagged():
     with patch("src.api.tailor.llm.complete", return_value=mock_response([{"text": "Made it up."}])):
         out = tailor(JOB_TEXT, _role_profile(1))["bullets"]
     assert out[0]["included"] and out[0]["flags"] == ["missing_citation"]
+
+
+def test_bold_markers_do_not_change_fact_check_or_ats_score():
+    from src.api.ats import score
+    assert check_bullet("Cut costs by **40%** at **Acme**", "s", {"s": "Cut costs by 40% at Acme"}) == []
+    assert check_bullet("Cut costs by 41%", "s", {"s": "Cut **costs** by **40%**"}) == ["unsupported_fact"]
+    assert score("python sql", "**Python** and SQL") == score("python sql", "Python and SQL")
+
+
+def test_prompt_asks_to_keep_bold_markers():
+    with patch("src.api.tailor.llm.complete", return_value=mock_response([])) as mock:
+        tailor(JOB_TEXT, PROFILE)
+    assert "**" in mock.call_args.args[0]

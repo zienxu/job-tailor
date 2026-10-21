@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, Plus } from 'lucide-react'
 import * as api from '../api'
+import BoldTextarea from '../components/BoldTextarea'
 
 type Form = api.RoleFields & { id?: number; tmp?: number; bullets: string; editing?: boolean; orig?: Form }
 let nextTmp = 0 // stable React key for unsaved forms
@@ -125,7 +126,7 @@ export default function Experience({ kind = 'experience' }: { kind?: api.RoleKin
               ))}
             </div>
             <label className="label mt-4">{L.bullets}
-              <textarea className="field ruled font-serif" rows={6} readOnly={!f.editing} value={f.bullets} onChange={(e) => edit(i, { bullets: e.target.value })} />
+              <BoldTextarea className="field ruled font-serif" rows={6} readOnly={!f.editing} value={f.bullets} onChange={(e) => edit(i, { bullets: e.target.value })} />
             </label>
             <div className="mt-4 flex items-center justify-between gap-2">
               <button type="button" className="btn btn-quiet" disabled={!f.editing} onClick={() => remove(i)}>Delete</button>

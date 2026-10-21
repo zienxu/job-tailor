@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, Plus } from 'lucide-react'
 import * as api from '../api'
+import BoldTextarea from '../components/BoldTextarea'
 
 type Form = { id?: number; tmp?: number; label: string; text: string; editing?: boolean; orig?: Form }
 let nextTmp = 0 // stable React key for unsaved forms
@@ -75,7 +76,7 @@ export default function Entries({ section }: { section: api.Section }) {
         {forms.map((f, i) => (
           <form key={f.id ?? `new-${f.tmp}`} className="record" onSubmit={(e) => { e.preventDefault(); if (f.editing) save(i) }}>
             <label className="label">Label<input className="field" readOnly={!f.editing} value={f.label} onChange={(e) => edit(i, { label: e.target.value })} /></label>
-            <label className="label mt-4">Text<textarea className="field font-serif leading-relaxed" rows={3} readOnly={!f.editing} value={f.text} onChange={(e) => edit(i, { text: e.target.value })} /></label>
+            <label className="label mt-4">Text<BoldTextarea className="field font-serif leading-relaxed" rows={3} readOnly={!f.editing} value={f.text} onChange={(e) => edit(i, { text: e.target.value })} /></label>
             <div className="mt-4 flex items-center justify-between gap-2">
               <button type="button" className="btn btn-quiet" disabled={!f.editing} onClick={() => remove(i)}>Delete</button>
               <div className="flex gap-2">

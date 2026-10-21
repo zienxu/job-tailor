@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
 import * as api from '../api'
+import BoldTextarea from '../components/BoldTextarea'
 
 type Form = { id?: number; tmp?: number; role_id: number | ''; text: string; editing?: boolean; orig?: Form }
 let nextTmp = 0 // stable React key for unsaved forms
@@ -68,7 +69,7 @@ export default function Stories() {
                 {roles.filter((r) => r.kind !== 'education' || r.id === f.role_id).map((r) => <option key={r.id} value={r.id}>{[r.company, r.title].filter(Boolean).join(' - ')}</option>)}
               </select>
             </label>
-            <label className="label mt-4">Story<textarea className="field font-serif leading-relaxed" rows={5} readOnly={!f.editing} value={f.text} onChange={(e) => edit(i, { text: e.target.value })} /></label>
+            <label className="label mt-4">Story<BoldTextarea className="field font-serif leading-relaxed" rows={5} readOnly={!f.editing} value={f.text} onChange={(e) => edit(i, { text: e.target.value })} /></label>
             <div className="mt-4 flex items-center justify-between gap-2">
               <button type="button" className="btn btn-quiet" disabled={!f.editing} onClick={() => remove(i)}>Delete</button>
               <div className="flex gap-2">
