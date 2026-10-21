@@ -66,6 +66,7 @@ export default function Editor() {
   const [extras, setExtras] = useState<Extra[]>([])
   const [order, setOrder] = useState<api.SectionKey[]>(DEFAULT_ORDER)
   const [ats, setAts] = useState<api.Ats | null>(null)
+  const [roleHits, setRoleHits] = useState<Record<string, number>>({})
   const [critic, setCritic] = useState<api.Critique | null>(null)
   const [criticLoading, setCriticLoading] = useState(false)
   const [html, setHtml] = useState('')
@@ -110,10 +111,14 @@ export default function Editor() {
     setChecking(true)
     const t = setTimeout(() => {
       const fallback = bullets.filter((b) => b.included && b.fallback).map((b) => b.text)
+      // Per-role job-term hits over what each role puts on the page, like atsText.
+      const roleText = Object.fromEntries(roles.filter((r) => r.kind !== 'education').map((r) => [`role_${r.id}`,
+        [r.company, r.title, ...bullets.filter((b) => b.included && b.role_id === `role_${r.id}`).map((b) => b.text)].join('\n')]))
       // Both must return before the gate opens: flags and page count must come from this draft.
-      Promise.all([api.check(jobId, atsText(resume), bullets), api.preview(resume, jobId, fallback)]).then(([r, p]) => {
+      Promise.all([api.check(jobId, atsText(resume), bullets, roleText), api.preview(resume, jobId, fallback)]).then(([r, p]) => {
         if (stale) return
         setAts(r.ats)
+        setRoleHits(r.role_hits ?? {})
         setBullets((bs) => bs.map((b, i) => ({ ...b, flags: r.flags[i] ?? b.flags })))
         const { html, ...f } = p
         setHtml(html)
@@ -321,6 +326,9 @@ export default function Editor() {
             <div key={g.id ?? 'uncited'} className="record">
               <h2 className="font-serif text-lg font-semibold">{g.title}</h2>
               {g.dates && <p className="text-sm text-muted">{g.dates}</p>}
+              {g.id !== null && g.id in roleHits && (
+                <p className="text-sm text-muted" title="local estimate">{roleHits[g.id]} job term{roleHits[g.id] === 1 ? '' : 's'}</p>
+              )}
               {g.items.some((b) => b.included && b.fallback) && <p className="text-sm text-muted">Copied as saved</p>}
               {g.items.length > 0 && <ul className="mt-3 flex flex-col gap-4">{g.items.map((b) => renderBullet(b, g.cited))}</ul>}
             </div>

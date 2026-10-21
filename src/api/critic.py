@@ -12,20 +12,26 @@ SYSTEM_PROMPT = (
     '{"unmet_must_haves": ["..."], '
     '"weak_bullets": [{"text": "...", "reason": "..."}], '
     '"missing_keywords": ["..."], '
-    '"overstated_claims": [{"text": "...", "reason": "..."}]}'
+    '"overstated_claims": [{"text": "...", "reason": "..."}], '
+    '"readiness": {"verdict": "ready" or "needs_work", "reason": "..."}}. '
+    "readiness is your one-line call on whether this resume is ready to send for this job."
 )
 
 
 def _failed(error: str) -> dict:
-    return {**{k: [] for k in KEYS}, "error": error}
+    return {**{k: [] for k in KEYS}, "readiness": None, "error": error}
 
 
 def _valid(parsed: dict) -> bool:
     def is_note(i):
         return isinstance(i, dict) and isinstance(i.get("text"), str) and isinstance(i.get("reason"), str)
 
+    readiness = parsed.get("readiness")
     return (
-        all(isinstance(parsed.get(k), list) for k in KEYS)
+        isinstance(readiness, dict)
+        and readiness.get("verdict") in ("ready", "needs_work")
+        and isinstance(readiness.get("reason"), str)
+        and all(isinstance(parsed.get(k), list) for k in KEYS)
         and all(isinstance(i, str) for k in ("unmet_must_haves", "missing_keywords") for i in parsed[k])
         and all(is_note(i) for k in ("weak_bullets", "overstated_claims") for i in parsed[k])
     )
@@ -44,4 +50,5 @@ def critique(job_text: str, resume: dict) -> dict:
             raise ValueError("critic response has the wrong shape")
     except Exception:
         return _failed("unparseable_response")
-    return {k: parsed[k] for k in KEYS}
+    readiness = {"verdict": parsed["readiness"]["verdict"], "reason": parsed["readiness"]["reason"]}
+    return {**{k: parsed[k] for k in KEYS}, "readiness": readiness}

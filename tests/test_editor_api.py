@@ -47,13 +47,22 @@ def test_check_scores_and_rechecks_flags(seeded):
     assert fixed["ats"]["label"] == "local estimate"
 
 
+def test_check_returns_per_role_hits(seeded):
+    client, job_id, _, _ = seeded
+    out = client.post(f"/jobs/{job_id}/check", json={
+        "text": "", "bullets": [], "roles": {"role_1": "Ran Kubernetes and caching", "role_2": "Wrote docs"}}).json()
+    assert out["role_hits"] == {"role_1": 2, "role_2": 0}
+
+
 def test_critique_passes_through(seeded):
     client, job_id, _, _ = seeded
     out = json.dumps({"unmet_must_haves": ["kubernetes"], "weak_bullets": [],
-                      "missing_keywords": [], "overstated_claims": []})
+                      "missing_keywords": [], "overstated_claims": [],
+                      "readiness": {"verdict": "needs_work", "reason": "no kubernetes"}})
     with patch("src.api.critic.llm.complete", return_value=out) as mock:
         resp = client.post(f"/jobs/{job_id}/critique", json={"bullets": [{"text": "Did caching."}]})
     assert resp.json()["unmet_must_haves"] == ["kubernetes"]
+    assert resp.json()["readiness"] == {"verdict": "needs_work", "reason": "no kubernetes"}
     assert "Did caching." in mock.call_args.args[1]
 
 

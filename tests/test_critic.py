@@ -17,6 +17,7 @@ MOCK = json.dumps({
     "weak_bullets": [{"text": "Onboarded 4 new hires onto the platform team.", "reason": "no outcome"}],
     "missing_keywords": ["reliability"],
     "overstated_claims": [{"text": "Designed REST APIs used by 3 million users.", "reason": "scale unclear"}],
+    "readiness": {"verdict": "needs_work", "reason": "no CI/CD evidence"},
 })
 
 
@@ -53,6 +54,18 @@ def test_unparseable_or_wrong_shape_fails_closed():
             result = critique(JOB_TEXT, RESUME)
         assert result["error"] == "unparseable_response"
         assert all(result[k] == [] for k in KEYS)
+
+
+def test_bad_readiness_fails_closed():
+    good = json.loads(MOCK)
+    bads = [{**good, "readiness": {"verdict": "maybe", "reason": "x"}},
+            {**good, "readiness": {"verdict": "ready"}},
+            {k: v for k, v in good.items() if k != "readiness"}]
+    for bad in bads:
+        with patch("src.api.critic.llm.complete", return_value=json.dumps(bad)):
+            result = critique(JOB_TEXT, RESUME)
+        assert result["error"] == "unparseable_response"
+        assert result["readiness"] is None
 
 
 def test_llm_call_failure_is_reported_as_such():

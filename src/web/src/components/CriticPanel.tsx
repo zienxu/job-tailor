@@ -19,6 +19,14 @@ export default function CriticPanel({ critic, loading, disabled, onRerun }: Prop
       {!loading && critic?.error && <p role="alert" className="alert mt-3">Critic failed ({critic.error}). Try re-running it.</p>}
       {!loading && critic && !critic.error && (
         <div className="mt-3 flex flex-col gap-3 text-sm">
+          {critic.readiness && (
+            <div data-testid="readiness">
+              <h3 className="font-medium">
+                {critic.readiness.verdict === 'ready' ? 'Ready to send' : 'Needs work'} <span className="font-normal text-muted">(advice only)</span>
+              </h3>
+              <p className="text-muted">{critic.readiness.reason}</p>
+            </div>
+          )}
           {LISTS.map(([k, title]) => critic[k].length > 0 && (
             <div key={k}><h3 className="font-medium">{title}</h3><p className="text-muted">{critic[k].join(', ')}</p></div>
           ))}

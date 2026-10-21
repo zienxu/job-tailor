@@ -14,6 +14,7 @@ export type Ats = { label: string; score: number; matched: string[]; missing: st
 export type Note = { text: string; reason: string }
 export type Critique = {
   unmet_must_haves: string[]; weak_bullets: Note[]; missing_keywords: string[]; overstated_claims: Note[]; error?: string
+  readiness?: { verdict: 'ready' | 'needs_work'; reason: string } | null
 }
 export type SectionKey = 'summary' | 'education' | 'experience' | 'leadership' | 'projects' | 'skills'
 export type LabelText = { label: string; text: string }
@@ -75,8 +76,8 @@ export const swapEntries = (a: number, b: number) => req<void>('POST', `/entries
 
 export const createJob = (text: string) => req<Job>('POST', '/jobs', { text })
 export const tailor = (jobId: number) => req<{ bullets: DraftBullet[] }>('POST', `/jobs/${jobId}/tailor`)
-export const check = (jobId: number, text: string, bullets: DraftBullet[]) =>
-  req<{ ats: Ats; flags: string[][] }>('POST', `/jobs/${jobId}/check`, { text, bullets })
+export const check = (jobId: number, text: string, bullets: DraftBullet[], roles: Record<string, string>) =>
+  req<{ ats: Ats; flags: string[][]; role_hits: Record<string, number> }>('POST', `/jobs/${jobId}/check`, { text, bullets, roles })
 export const critique = (jobId: number, bullets: DraftBullet[]) => req<Critique>('POST', `/jobs/${jobId}/critique`, { bullets })
 export const preview = (resume: Resume, jobId: number, fallback: string[]) =>
   req<{ html: string } & Fit>('POST', '/preview', { resume, job_id: jobId, fallback })

@@ -31,8 +31,9 @@ beforeEach(() => {
   m.critique.mockResolvedValue(emptyCritique)
   m.preview.mockResolvedValue({ html: '<p>preview</p>', pages: 1, shorten: [], remove: [] })
   // Stand-in for the backend: "kubernetes" is the one missing keyword, and "9" contradicts the source.
-  m.check.mockImplementation(async (_id, text, bullets) => ({
+  m.check.mockImplementation(async (_id, text, bullets, roles) => ({
     ats: { label: 'local estimate', score: text.includes('kubernetes') ? 100 : 50, matched: [], missing: [] },
+    role_hits: Object.fromEntries(Object.entries(roles).map(([k, t]) => [k, t.includes('kubernetes') ? 1 : 0])),
     flags: bullets.map((b) => (!b.source_id ? ['missing_citation'] : b.text.includes('9') ? ['unsupported_fact'] : [])),
   }))
 })
@@ -241,4 +242,27 @@ test('over 1 page blocks download and shows shorten then remove suggestions', as
   expect(screen.getByText('Chess Club: Led 20 members')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /Download PDF/ })).toBeDisabled()
   expect(screen.getByLabelText('Bullet 1')).toHaveValue('Cut build time by 40%') // never auto-edits
+})
+
+test('each role card shows its job-term hits, leadership included', async () => {
+  const user = await tailored()
+  const acme = screen.getByRole('heading', { name: 'Acme - Engineer' }).parentElement!
+  const club = screen.getByRole('heading', { name: 'Chess Club - President' }).parentElement!
+  await waitFor(() => expect(within(acme).getByText('0 job terms')).toBeInTheDocument())
+  expect(within(club).getByText('0 job terms')).toBeInTheDocument()
+
+  await user.type(screen.getByLabelText('Bullet 1'), ' on kubernetes')
+  await waitFor(() => expect(within(acme).getByText('1 job term')).toBeInTheDocument())
+})
+
+test('the readiness verdict shows and "needs_work" does not block download', async () => {
+  m.critique.mockResolvedValue({ ...emptyCritique, readiness: { verdict: 'needs_work', reason: 'No kubernetes evidence' } })
+  const user = await tailored()
+  expect(await screen.findByText('Needs work')).toBeInTheDocument()
+  expect(screen.getByText('No kubernetes evidence')).toBeInTheDocument()
+
+  await user.click(screen.getByLabelText('Remove bullet 3'))
+  await user.click(screen.getByLabelText('Keep anyway'))
+  await user.click(screen.getByLabelText("I've reviewed this draft"))
+  await waitFor(() => expect(screen.getByRole('button', { name: /Download PDF/ })).toBeEnabled())
 })

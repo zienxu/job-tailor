@@ -198,13 +198,16 @@ class CitedBullet(BaseModel):
 class CheckReq(BaseModel):
     text: str
     bullets: list[CitedBullet]
+    roles: dict[str, str] = Field({}, max_length=500)  # role key -> that role's included text, for per-role hit counts
 
 
 @app.post("/jobs/{id}/check")
 def check_draft(id: int, body: CheckReq, conn=Depends(get_conn)):
     job = _get(conn, "jobs", id)
     sources = _sources(db.load_profile(conn))
+    terms = ats.extract_terms(job["text"])
     return {"ats": ats.score(job["text"], body.text),
+            "role_hits": {k: ats.hits(terms, text) for k, text in body.roles.items()},
             "flags": [check_bullet(b.text, b.source_id, sources) for b in body.bullets]}
 
 
