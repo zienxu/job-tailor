@@ -22,7 +22,7 @@ beforeEach(() => {
     { id: 2, section: 'skills', label: 'Languages', text: 'Python' },
   ])
   m.latestVersion.mockResolvedValue(null)
-  m.createJob.mockResolvedValue({ id: 5, text: 'job', company: '', title: '', link: '' })
+  m.createJob.mockResolvedValue({ id: 5, text: 'job', company: '', title: '', link: '', status: 'saved', applied_at: '', notes: '', version_id: null })
   m.tailor.mockResolvedValue({ bullets: [
     { text: 'Cut build time by 40%', source_id: 'bullet_1', role_id: 'role_1', flags: [] },
     { text: 'Led 9 teams', source_id: 'bullet_2', role_id: 'role_1', flags: ['unsupported_fact'] },
@@ -83,7 +83,6 @@ test('re-run calls the critic again', async () => {
 })
 
 test('download is blocked until flags are resolved and the draft is reviewed', async () => {
-  m.saveVersion.mockResolvedValue({} as api.Version)
   m.pdf.mockResolvedValue(new Blob(['%PDF']))
   URL.createObjectURL = vi.fn(() => 'blob:x')
   URL.revokeObjectURL = vi.fn()
@@ -101,8 +100,28 @@ test('download is blocked until flags are resolved and the draft is reviewed', a
 
   await user.click(download)
   await waitFor(() => expect(m.pdf).toHaveBeenCalled())
-  expect(m.saveVersion).toHaveBeenCalledWith(5, expect.objectContaining({ bullets: expect.any(Array) }))
+  expect(m.saveVersion).not.toHaveBeenCalled() // downloading never saves; only "Save in tracker" does
   expect(m.pdf.mock.calls[0][0].experience[0].bullets).toEqual(['Cut build time by 40%', 'Led 9 teams'])
+})
+
+test('"Save in tracker" uses the download gate and saves the resume payload', async () => {
+  m.saveVersion.mockResolvedValue({} as api.Version)
+  m.listJobs.mockResolvedValue([{ id: 5 }, { id: 2 }, { id: 1 }] as api.Job[])
+  const user = await tailored()
+  const save = screen.getByRole('button', { name: /Save in tracker/ })
+  expect(save).toBeDisabled()
+
+  await user.click(screen.getByLabelText('Remove bullet 3'))
+  await user.click(screen.getByLabelText('Keep anyway'))
+  await user.click(screen.getByLabelText("I've reviewed this draft"))
+  await waitFor(() => expect(save).toBeEnabled())
+
+  await user.click(save)
+  await waitFor(() => expect(m.saveVersion).toHaveBeenCalledWith(5, expect.objectContaining({
+    bullets: expect.any(Array), resume: expect.objectContaining({ experience: expect.any(Array) }),
+  })))
+  expect(await screen.findByText('Saved as v1 of row 3 in the tracker')).toBeInTheDocument()
+  expect(m.pdf).not.toHaveBeenCalled()
 })
 
 test('download waits for the fact check of the latest edit', async () => {

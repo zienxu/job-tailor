@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
 from src.api import ats, db, pdf
 from src.api.critic import critique
@@ -146,6 +146,8 @@ _crud("entries", Entry)
 
 @app.post("/jobs", status_code=201)
 def create_job(body: Job, conn=Depends(get_conn)):
+    # Each Tailor run makes a job; drop earlier runs never saved to the tracker so they don't pile up.
+    conn.execute("DELETE FROM jobs WHERE NOT EXISTS (SELECT 1 FROM resume_versions v WHERE v.job_id = jobs.id)")
     cur = _write(conn, "INSERT INTO jobs (text, company, title, link) VALUES (?, ?, ?, ?)",
                  (body.text, body.company, body.title, body.link))
     return _get(conn, "jobs", cur.lastrowid)
@@ -301,3 +303,57 @@ def list_versions(id: int, conn=Depends(get_conn)):
 def latest_version(conn=Depends(get_conn)):
     row = conn.execute("SELECT * FROM resume_versions ORDER BY id DESC LIMIT 1").fetchone()
     return _version(row) if row else None
+
+
+@app.get("/versions/{id}/pdf")
+def version_pdf(id: int, conn=Depends(get_conn)):  # plain def: render_pdf uses sync Playwright
+    content = json.loads(_get(conn, "resume_versions", id)["content"])
+    if "resume" not in content:  # versions saved before step 8 stored only the draft
+        raise HTTPException(409, "saved before the tracker, can't rebuild")
+    try:  # stored JSON was never validated on save
+        resume = Resume.model_validate(content["resume"]).model_dump()
+    except ValidationError:
+        raise HTTPException(409, "stored resume is invalid, can't rebuild")
+    return Response(pdf.render_pdf(resume), media_type="application/pdf")
+
+
+@app.get("/jobs")
+def list_jobs(conn=Depends(get_conn)):
+    versions = {}
+    for v in conn.execute("SELECT id, job_id, created_at FROM resume_versions ORDER BY id"):
+        versions.setdefault(v["job_id"], []).append({"id": v["id"], "created_at": v["created_at"]})
+    return [{**dict(j), "versions": versions.get(j["id"], [])}
+            # Only jobs saved with "Save in tracker"; Tailor also makes a job row, for /check and /preview.
+            for j in conn.execute("SELECT * FROM jobs WHERE EXISTS"
+                                  " (SELECT 1 FROM resume_versions v WHERE v.job_id = jobs.id) ORDER BY id DESC")]
+
+
+class JobUpdate(BaseModel):
+    company: str = ""
+    title: str = ""
+    link: str = ""
+    status: Literal["saved", "applied", "interview", "offer", "rejected"] = "saved"
+    applied_at: Annotated[str, StringConstraints(pattern=r"^(\d{4}-\d{2}-\d{2})?$")] = ""  # <input type="date"> value
+    notes: str = ""
+    version_id: int | None = None
+
+
+@app.put("/jobs/{id}")
+def update_job(id: int, body: JobUpdate, conn=Depends(get_conn)):
+    job = {**_get(conn, "jobs", id), **body.model_dump(exclude_unset=True)}
+    vid = job["version_id"]
+    if vid is not None and not conn.execute(
+            "SELECT 1 FROM resume_versions WHERE id = ? AND job_id = ?", (vid, id)).fetchone():
+        raise HTTPException(422, f"version {vid} is not a version of job {id}")
+    if job["status"] == "applied" and vid is None:
+        raise HTTPException(422, "marking applied needs the version sent")
+    fields = body.model_dump(exclude_unset=True)
+    if fields:
+        _write(conn, f"UPDATE jobs SET {', '.join(c + ' = ?' for c in fields)} WHERE id = ?", [*fields.values(), id])
+    return _get(conn, "jobs", id)
+
+
+@app.delete("/jobs/{id}", status_code=204)
+def delete_job(id: int, conn=Depends(get_conn)):
+    _get(conn, "jobs", id)
+    _write(conn, "DELETE FROM jobs WHERE id = ?", (id,))  # versions cascade

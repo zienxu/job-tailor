@@ -4,6 +4,7 @@ import Editor from './pages/Editor'
 import Entries from './pages/Entries'
 import Experience from './pages/Experience'
 import Stories from './pages/Stories'
+import Tracker from './pages/Tracker'
 
 type Page = 'experience' | 'project' | 'education' | 'leadership' | 'skills' | 'stories' | 'editor' | 'tracker'
 
@@ -15,7 +16,7 @@ const PAGES: [Page, string, LucideIcon, boolean][] = [
   ['skills', 'Skills', Wrench, true],
   ['stories', 'Stories', BookOpen, true],
   ['editor', 'Editor', PenLine, true],
-  ['tracker', 'Tracker', ListChecks, false],
+  ['tracker', 'Tracker', ListChecks, true],
 ]
 
 const KEY = 'sidebar-collapsed'
@@ -86,6 +87,7 @@ export default function App() {
       <main className="min-w-0 flex-1 px-5 py-8 sm:px-10 sm:py-12">
         {page === 'stories' ? <Stories />
           : page === 'editor' ? <Editor />
+          : page === 'tracker' ? <Tracker />
           : page === 'skills' ? <Entries section={page} />
           : page === 'project' || page === 'education' || page === 'leadership' ? <Experience key={page} kind={page} />
           : <Experience />}

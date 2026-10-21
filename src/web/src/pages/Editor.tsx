@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Download, Maximize2, Sparkles, TriangleAlert, Unlink, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Download, Maximize2, Save, Sparkles, TriangleAlert, Unlink, X } from 'lucide-react'
 import * as api from '../api'
 import CriticPanel from '../components/CriticPanel'
 import ScorePanel from '../components/ScorePanel'
@@ -81,6 +81,8 @@ export default function Editor() {
   const [scale, setScale] = useState(0.55)
   const fullRef = useRef<HTMLDialogElement>(null)
   const [error, setError] = useState('')
+  const [saved, setSaved] = useState('') // which tracker row and version the last save went to
+  const saves = useRef(0) // versions saved for this job; every Tailor run makes a new job
 
   useEffect(() => {
     Promise.all([api.listRoles(), api.listBullets(), api.listEntries(), api.latestVersion()]).then(([rs, bs, es, v]) => {
@@ -104,7 +106,7 @@ export default function Editor() {
   // Flags and "kept" are left out, so a re-check result doesn't trigger another re-check.
   const draftKey = JSON.stringify([resume, bullets.map((b) => [b.text, b.source_id])])
 
-  useEffect(() => setReviewed(false), [draftKey])
+  useEffect(() => { setReviewed(false); setSaved('') }, [draftKey])
 
   useEffect(() => {
     if (jobId === null) return
@@ -163,9 +165,29 @@ export default function Editor() {
       const bs = out.bullets.map((b) => ({ ...b, included: b.included ?? true, key: nextKey++ }))
       jobRef.current = job.id
       setJobId(job.id)
+      saves.current = 0
       setBullets(bs)
       setCritic(null)
       runCritic(job.id, bs.filter((b) => b.included))
+    } catch (e) {
+      setError((e as Error).message)
+    }
+    setBusy(false)
+  }
+
+  // Only this button writes a version; downloading never does.
+  async function saveToTracker() {
+    if (jobId === null) return
+    setBusy(true)
+    setError('')
+    try {
+      await api.saveVersion(jobId, {
+        name, contacts: lines(contacts), summary, bullets: bullets.map(({ key, kept, ...b }) => b),
+        order, education: resume.education, skills: resume.skills, resume,
+      })
+      // Row number as the Tracker shows it: oldest saved job is row 1 (listJobs is newest first).
+      const jobs = await api.listJobs()
+      setSaved(`Saved as v${++saves.current} of row ${jobs.length - jobs.findIndex((j) => j.id === jobId)} in the tracker`)
     } catch (e) {
       setError((e as Error).message)
     }
@@ -177,10 +199,6 @@ export default function Editor() {
     setBusy(true)
     setError('')
     try {
-      await api.saveVersion(jobId, {
-        name, contacts: lines(contacts), summary, bullets: bullets.map(({ key, kept, ...b }) => b),
-        order, education: resume.education, skills: resume.skills,
-      })
       const url = URL.createObjectURL(await api.pdf(resume))
       const a = document.createElement('a')
       a.href = url
@@ -205,7 +223,7 @@ export default function Editor() {
   })
 
   const unresolved = bullets.filter((b) => b.included && b.flags.length > 0 && !b.kept).length
-  const canDownload = jobId !== null && unresolved === 0 && reviewed && !checking && !busy && fit.pages <= 1
+  const canSend = jobId !== null && unresolved === 0 && reviewed && !checking && !busy && fit.pages <= 1
   const clip = (t: string) => (t.length > 60 ? `${t.slice(0, 60)}...` : t)
 
   const groups = [
@@ -264,7 +282,7 @@ export default function Editor() {
     <section>
       <header className="mb-8">
         <h1 className="page-title">Editor</h1>
-        <p className="page-lede">Paste a job, tailor your bullets to it, then check every flag before downloading the PDF.</p>
+        <p className="page-lede">Paste a job, tailor your bullets to it, then check every flag before saving or downloading.</p>
       </header>
       {error && <p role="alert" className="alert">{error}</p>}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]">
@@ -360,9 +378,15 @@ export default function Editor() {
                 <input type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />
                 I've reviewed this draft
               </label>
-              <button type="button" className="btn btn-primary self-start" disabled={!canDownload} onClick={download}>
-                <Download aria-hidden size={16} />Download PDF
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="btn btn-secondary" disabled={!canSend} onClick={saveToTracker}>
+                  <Save aria-hidden size={16} />Save in tracker
+                </button>
+                <button type="button" className="btn btn-primary" disabled={!canSend} onClick={download}>
+                  <Download aria-hidden size={16} />Download PDF
+                </button>
+                <p role="status" className="text-sm text-muted">{saved}</p>
+              </div>
             </div>
           )}
         </div>

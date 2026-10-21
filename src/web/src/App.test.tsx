@@ -42,17 +42,14 @@ test('nav opens Projects, Education, Leadership and Skills', async () => {
   }
 })
 
-test('Tracker cannot be opened yet', async () => {
+test('Tracker opens', async () => {
+  m.listJobs.mockResolvedValue([])
   const user = userEvent.setup()
   render(<App />)
 
-  for (const name of ['Tracker']) {
-    const item = screen.getByRole('button', { name })
-    expect(item).toBeDisabled()
-    await user.click(item)
-    expect(item).not.toHaveAttribute('aria-current')
-  }
-  expect(screen.getByRole('heading', { name: 'Experience' })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Tracker' }))
+  expect(screen.getByRole('heading', { name: 'Tracker' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Tracker' })).toHaveAttribute('aria-current', 'page')
 })
 
 test('collapsed sidebar is remembered after a remount', async () => {

@@ -20,7 +20,9 @@ CREATE TABLE IF NOT EXISTS stories (
 CREATE TABLE IF NOT EXISTS jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT, company TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
     link TEXT NOT NULL DEFAULT '', text TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status TEXT NOT NULL DEFAULT 'saved', applied_at TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
+    version_id INTEGER);
 CREATE TABLE IF NOT EXISTS resume_versions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE, content TEXT NOT NULL,
@@ -62,6 +64,10 @@ def connect() -> sqlite3.Connection:
         conn.commit()
         conn.execute(f"CREATE TRIGGER IF NOT EXISTS {t}_position AFTER INSERT ON {t} WHEN NEW.position IS NULL"
                      f" BEGIN UPDATE {t} SET position = NEW.id WHERE id = NEW.id; END")
+    # Tracker fields from step 8. version_id has no FK: deleting a job cascades its versions, main.py checks ownership.
+    for col, ddl in (("status", "TEXT NOT NULL DEFAULT 'saved'"), ("applied_at", "TEXT NOT NULL DEFAULT ''"),
+                     ("notes", "TEXT NOT NULL DEFAULT ''"), ("version_id", "INTEGER")):
+        _add_column(conn, "jobs", col, ddl)
     _migrate_leadership(conn)
     return conn
 

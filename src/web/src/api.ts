@@ -8,7 +8,9 @@ export type Section = 'leadership' | 'skills'
 export type EntryFields = { section: Section; label: string; text: string }
 export type Entry = EntryFields & { id: number }
 
-export type Job = { id: number; text: string; company: string; title: string; link: string }
+export type Status = 'saved' | 'applied' | 'interview' | 'offer' | 'rejected'
+export type JobFields = { company: string; title: string; link: string; status: Status; applied_at: string; notes: string; version_id: number | null }
+export type Job = JobFields & { id: number; text: string; created_at?: string; versions?: { id: number; created_at: string }[] }
 export type DraftBullet = { text: string; source_id: string | null; role_id: string | null; flags: string[]; fallback?: boolean; included?: boolean }
 export type Ats = { label: string; score: number; matched: string[]; missing: string[] }
 export type Note = { text: string; reason: string }
@@ -32,6 +34,7 @@ export type Resume = {
 export type Draft = {
   name: string; contacts: string[]; summary: string; bullets: DraftBullet[]
   order?: SectionKey[]; education?: Education[]; skills?: LabelText[]
+  resume?: Resume // the exact payload sent to /pdf, so the tracker can rebuild it
 }
 export type Suggestion = { section: string; role: string; text: string; words?: number }
 export type Fit = { pages: number; shorten: Suggestion[]; remove: Suggestion[] }
@@ -75,6 +78,10 @@ export const deleteEntry = (id: number) => req<void>('DELETE', `/entries/${id}`)
 export const swapEntries = (a: number, b: number) => req<void>('POST', `/entries/${a}/swap/${b}`)
 
 export const createJob = (text: string) => req<Job>('POST', '/jobs', { text })
+export const listJobs = () => req<Job[]>('GET', '/jobs')
+export const updateJob = (id: number, j: JobFields) => req<Job>('PUT', `/jobs/${id}`, j)
+export const deleteJob = (id: number) => req<void>('DELETE', `/jobs/${id}`)
+export const versionPdf = async (id: number) => (await send('GET', `/versions/${id}/pdf`)).blob()
 export const tailor = (jobId: number) => req<{ bullets: DraftBullet[] }>('POST', `/jobs/${jobId}/tailor`)
 export const check = (jobId: number, text: string, bullets: DraftBullet[], roles: Record<string, string>) =>
   req<{ ats: Ats; flags: string[][]; role_hits: Record<string, number> }>('POST', `/jobs/${jobId}/check`, { text, bullets, roles })
