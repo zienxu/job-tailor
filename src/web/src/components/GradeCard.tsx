@@ -5,13 +5,15 @@ import type { Grade } from '../api'
 const BAND_CLS = { Apply: 'border-accent/50 bg-accent/10 text-accent', Stretch: 'border-warn/50 bg-warn/10 text-warn', Skip: 'border-danger/50 bg-danger/10 text-danger' }
 const STATUS_CLS = { met: 'text-accent', partial: 'text-warn', missing: 'text-danger' }
 
+const SENIORITY = { under: 'Role is more senior than your experience', match: 'Seniority matches', over: 'You are more senior than the role' }
+
 type Props = { grade: Grade | null | undefined; loading?: boolean; error?: string; onRegrade?: () => void }
 
 export default function GradeCard({ grade, loading, error, onRegrade }: Props) {
   const titleId = useId() // the Tracker can show several cards at once
   const musts = grade?.requirements.filter((r) => r.kind === 'must') ?? []
-  // The band only differs from the score when a missing hard requirement held an Apply score at Stretch.
-  const gates = grade && grade.score >= 3.8 ? musts.filter((r) => r.hard_gate && r.status === 'missing') : []
+  // The band only differs from the score when a missing must-have held an Apply score at Stretch.
+  const gates = grade && grade.band === 'Stretch' && grade.score >= 3.8 ? musts.filter((r) => r.status === 'missing') : []
   return (
     <section className="record" aria-labelledby={titleId} aria-busy={loading}>
       <div className="flex items-center justify-between gap-2">
@@ -34,9 +36,11 @@ export default function GradeCard({ grade, loading, error, onRegrade }: Props) {
           <p className="mt-1 text-xs text-muted">Apply ≥ 3.8 · Stretch 3.0–3.7 · Skip below 3.0</p>
           {gates.length > 0 && (
             <p className="mt-1 text-xs text-warn" data-testid="grade-gated">
-              Held at Stretch: a hard requirement is missing ({gates.map((r) => r.text).join('; ')})
+              Held at Stretch: a must-have is missing ({gates.map((r) => r.text).join('; ')})
             </p>
           )}
+          {grade.summary && <p className="mt-2 text-sm" data-testid="grade-summary">{grade.summary}</p>}
+          {grade.seniority_fit && <p className="mt-1 text-xs text-muted" data-testid="grade-seniority">{SENIORITY[grade.seniority_fit]}</p>}
           <h3 className="mt-3 text-sm font-medium text-muted">Must-haves</h3>
           <ul className="mt-1 flex flex-col gap-2 text-sm">
             {musts.map((r, i) => (

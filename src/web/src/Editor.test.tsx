@@ -385,8 +385,24 @@ test('the grade card shows the band thresholds and when a hard requirement held 
   await gradedJob()
 
   expect(await screen.findByText('Apply ≥ 3.8 · Stretch 3.0–3.7 · Skip below 3.0')).toBeInTheDocument()
-  expect(screen.getByTestId('grade-gated')).toHaveTextContent('Held at Stretch: a hard requirement is missing (Singapore Citizen or PR)')
+  expect(screen.getByTestId('grade-gated')).toHaveTextContent('Held at Stretch: a must-have is missing (Singapore Citizen or PR)')
   expect(screen.getByText('hard requirement')).toBeInTheDocument()
+})
+
+test('the grade card shows the summary and seniority fit, and old grades without them still render', async () => {
+  m.gradeJob.mockResolvedValue({ ...grade('Apply', 4.1), summary: 'Strong Python match.', seniority_fit: 'over' })
+  await gradedJob()
+  expect(await screen.findByTestId('grade-summary')).toHaveTextContent('Strong Python match.')
+  expect(screen.getByTestId('grade-seniority')).toHaveTextContent('You are more senior than the role')
+})
+
+test('an old stored Apply grade with a missing non-hard must shows no "held" note', async () => {
+  m.gradeJob.mockResolvedValue({ ...grade('Apply', 4.1), requirements: [
+    { text: 'Kubernetes', kind: 'must', hard_gate: false, status: 'missing', evidence_ids: [], evidence: [] }] })
+  await gradedJob()
+  await screen.findByTestId('grade-band')
+  expect(screen.queryByTestId('grade-gated')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('grade-summary')).not.toBeInTheDocument()
 })
 
 test('a low score with a missing hard requirement has no "held" note', async () => {

@@ -13,19 +13,25 @@ SYSTEM_PROMPT = (
     "and evidence_ids: the profile ids (role, bullet, story, skill or fact) that show it, exactly as given. "
     "Facts are the candidate's own statements about work authorisation, citizenship, availability and "
     "experience level; use them for such requirements. "
-    "Also list 10 to 25 ATS keywords from the job, each tagged must or nice. Respond with JSON only: "
+    "Also list 10 to 25 ATS keywords from the job, each tagged must or nice. "
+    "Also give seniority_fit: under, match or over, comparing the level the job asks for with the candidate's "
+    "experience level, and summary: one plain sentence on how well the candidate fits overall. "
+    "Respond with JSON only: "
     '{"requirements": [{"text": "...", "kind": "must", "hard_gate": false, "status": "met", '
-    '"evidence_ids": ["bullet_1"]}], "keywords": [{"term": "...", "kind": "must"}]}'
+    '"evidence_ids": ["bullet_1"]}], "keywords": [{"term": "...", "kind": "must"}], '
+    '"seniority_fit": "match", "summary": "..."}'
 )
 
 WEIGHT = {"must": 2, "nice": 1}
 VALUE = {"met": 1, "partial": 0.5, "missing": 0}
+SENIORITY = ("under", "match", "over")
 
 
 def _valid(parsed) -> bool:
     reqs, kws = (parsed.get("requirements"), parsed.get("keywords")) if isinstance(parsed, dict) else (None, None)
     return (
         isinstance(reqs, list) and reqs and isinstance(kws, list)
+        and parsed.get("seniority_fit") in SENIORITY and isinstance(parsed.get("summary"), str)
         and all(isinstance(r, dict) and isinstance(r.get("text"), str) and r.get("kind") in WEIGHT
                 and isinstance(r.get("hard_gate"), bool) and r.get("status") in VALUE
                 and isinstance(r.get("evidence_ids"), list) for r in reqs)
@@ -55,6 +61,7 @@ def grade(job_text: str, profile: dict) -> dict:
     coverage = sum(WEIGHT[r["kind"]] * VALUE[r["status"]] for r in reqs) / sum(WEIGHT[r["kind"]] for r in reqs)
     # Half-up, not Python's half-even round(), which turns 3.25 into 3.2.
     score = float(Decimal(str(1 + 4 * coverage)).quantize(Decimal("0.1"), ROUND_HALF_UP))
-    gated = any(r["kind"] == "must" and r["hard_gate"] and r["status"] == "missing" for r in reqs)
+    gated = any(r["kind"] == "must" and r["status"] == "missing" for r in reqs)
     return {"score": score, "band": band(score, gated), "requirements": reqs,
-            "keywords": [{"term": k["term"], "kind": k["kind"]} for k in parsed["keywords"]]}
+            "keywords": [{"term": k["term"], "kind": k["kind"]} for k in parsed["keywords"]],
+            "seniority_fit": parsed["seniority_fit"], "summary": parsed["summary"].strip()}

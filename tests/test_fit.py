@@ -22,7 +22,8 @@ def _req(kind, status, ids, gate=False):
 
 
 def _mock(reqs, keywords=None):
-    return json.dumps({"requirements": reqs, "keywords": keywords or [{"term": "Python", "kind": "must"}]})
+    return json.dumps({"requirements": reqs, "keywords": keywords or [{"term": "Python", "kind": "must"}],
+                       "seniority_fit": "match", "summary": "Solid fit."})
 
 
 def _grade(reqs):
@@ -61,6 +62,19 @@ def test_missing_hard_gate_caps_at_stretch():
     assert (result["score"], result["band"]) == (4.5, "Stretch")
 
 
+def test_any_missing_must_caps_at_stretch():
+    # 7 met musts (14) + 1 missing non-gate must (0) -> score 4.5, held at Stretch; a missing nice does not cap
+    capped = _grade([_req("must", "met", [B1])] * 7 + [_req("must", "missing", [])])
+    assert (capped["score"], capped["band"]) == (4.5, "Stretch")
+    free = _grade([_req("must", "met", [B1])] * 7 + [_req("nice", "missing", [])])
+    assert free["band"] == "Apply"
+
+
+def test_seniority_and_summary_returned():
+    result = _grade([_req("must", "met", [B1])])
+    assert (result["seniority_fit"], result["summary"]) == ("match", "Solid fit.")
+
+
 def test_unknown_evidence_id_counts_as_missing():
     result = _grade([_req("must", "met", ["bullet_999"]), _req("must", "met", [B1])])
     assert [r["status"] for r in result["requirements"]] == ["missing", "met"]
@@ -83,7 +97,9 @@ def test_contacts_never_reach_the_llm_call():
 
 @pytest.mark.parametrize("raw", ["not json", json.dumps({"requirements": []}), json.dumps([1]),
                                  _mock([_req("must", "sorta", [])]), _mock([_req("must", "met", "bullet_1")]),
-                                 _mock([_req("must", "met", [])], keywords=[{"term": "x", "kind": "maybe"}])])
+                                 _mock([_req("must", "met", [])], keywords=[{"term": "x", "kind": "maybe"}]),
+                                 _mock([_req("must", "met", [B1])]).replace('"match"', '"huge"'),
+                                 json.dumps({"requirements": [_req("must", "met", [B1])], "keywords": []})])
 def test_bad_response_fails_closed_and_stores_nothing(client, raw):
     job_id = client.post("/jobs", json={"text": "Need Python"}).json()["id"]
     with patch("src.api.fit.llm.complete", return_value=raw):
