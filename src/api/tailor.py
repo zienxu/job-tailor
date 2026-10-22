@@ -16,7 +16,8 @@ SYSTEM_PROMPT = (
     "and stories. Sources are grouped by role. For every role write at most 3 bullets, the "
     "ones most relevant to the job, and at least 1; fewer than 3 is fine, never pad. "
     "Set source_id to the cited bullet's id exactly as given; you may also write bullets "
-    "drawn from a role's own stories, citing the story id. Do not invent facts, numbers, "
+    "drawn from a role's own stories, citing the story id; a story bullet summarises the story in one "
+    "resume-style sentence of at most 30 words, never copies it. Do not invent facts, numbers, "
     "companies, or titles not present in the cited source. "
     "Sources may mark bold with **double asterisks**; keep the ** around the same words where they survive in your bullet. "
     'Respond with JSON only: {"bullets": [{"text": "...", "source_id": "..."}]}'
@@ -49,7 +50,7 @@ def _flag_all_missing(sources: dict[str, str]) -> list[dict]:
     ]
 
 
-def tailor(job_text: str, profile: dict) -> dict:
+def tailor(job_text: str, profile: dict, keywords: list[dict] | None = None) -> dict:
     contacts, stripped = strip_contacts(profile)
     sources = _sources(stripped)
     user_prompt = build_prompt(job_text, stripped)
@@ -72,7 +73,7 @@ def tailor(job_text: str, profile: dict) -> dict:
         # Bullets without a valid citation stay included, so the review gate still sees their flag.
         out.append({"text": text, "source_id": source_id, "flags": flags, "fallback": False, "included": True})
 
-    terms = extract_terms(job_text)
+    terms = extract_terms(job_text, keywords)
 
     role_of = {s["id"]: s["role_id"] for s in stripped.get("bullets", []) + stripped.get("stories", [])}
     cited = {b["source_id"] for b in out if isinstance(b["source_id"], str)}

@@ -81,16 +81,31 @@ def _terms(job_text: str) -> dict[str, tuple[str, int]]:
 
 
 def _keys(text: str) -> set[str]:
+    """Every 1- to 4-word stem run; 3-4 word runs exist only so grade keywords like
+    "large language models" can match. shortcut: a 5+ word keyword never matches."""
     keys = set()
     for seg in SEGMENT_RE.split(text.replace("**", "")):
         stems = [_stem(t) for t in _tokens(seg)]
-        keys.update(stems)
-        keys.update(f"{a} {b}" for a, b in zip(stems, stems[1:]))
+        for n in range(1, 5):
+            keys.update(" ".join(stems[i:i + n]) for i in range(len(stems) - n + 1))
     return keys
 
 
-def extract_terms(job_text: str) -> list[str]:
-    return [display for display, _ in _terms(job_text).values()]
+def _job_terms(job_text: str, keywords: list[dict] | None = None) -> dict[str, tuple[str, int]]:
+    """The graded job's keywords (must 2, nice 1) when given, else the job's own terms."""
+    out = {}
+    for k in keywords or []:
+        if not (isinstance(k, dict) and isinstance(k.get("term"), str)):
+            continue  # a malformed stored keyword is skipped, never a 500
+        key, weight = _key(k["term"]), 2 if k.get("kind") == "must" else 1
+        old = out.get(key)
+        if key:
+            out[key] = (old[0], max(old[1], weight)) if old else (k["term"], weight)
+    return out or _terms(job_text)
+
+
+def extract_terms(job_text: str, keywords: list[dict] | None = None) -> list[str]:
+    return [display for display, _ in _job_terms(job_text, keywords).values()]
 
 
 @lru_cache(maxsize=4096)
@@ -104,8 +119,8 @@ def hits(terms: list[str], text: str) -> int:
     return sum(_key(term) in keys for term in terms)
 
 
-def score(job_text: str, resume_text: str) -> dict:
-    terms = _terms(job_text)
+def score(job_text: str, resume_text: str, keywords: list[dict] | None = None) -> dict:
+    terms = _job_terms(job_text, keywords)
     keys = _keys(resume_text)
     matched = [d for k, (d, _) in terms.items() if k in keys]
     missing = [d for k, (d, _) in terms.items() if k not in keys]

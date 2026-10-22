@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.api.tailor import tailor
+from src.api.tailor import SYSTEM_PROMPT, tailor
 from src.api.factcheck import check_bullet
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -102,6 +102,25 @@ def test_check_bullet_directly_for_each_category():
     assert check_bullet("Shipped feature X serving 500 users at Acme Corp.", "b1", sources) == ["unsupported_fact"]
     assert check_bullet("Shipped feature X serving 100 users at Initech.", "b1", sources) == ["unsupported_fact"]
     assert check_bullet("Shipped feature X serving 100 users at Acme Corp.", "b1", sources) == []
+
+
+STORY = ("At Acme Corp I noticed builds were slow. I profiled the pipeline, found redundant steps, "
+         "and added caching across 12 services, which cut build time by 40% and made releases calmer for everyone.")
+
+
+def test_story_bullet_must_be_one_short_sentence():
+    sources = {"story_1": STORY, "bullet_1": STORY}
+    one = "Cut build time by 40% by adding caching across 12 services at Acme Corp."
+    assert check_bullet(one, "story_1", sources) == []
+    assert check_bullet("Profiled the pipeline. Added caching across 12 services.", "story_1", sources) == ["story_too_long"]
+    assert check_bullet("e.g. caching across 12 services cut build time by 40%.", "story_1", sources) == []
+    assert check_bullet(" ".join(["caching"] * 31), "story_1", sources) == ["story_too_long"]
+    assert check_bullet(STORY, "bullet_1", sources) == []  # saved bullets are never length-checked
+    assert check_bullet(STORY.replace("12", "99"), "story_1", sources) == ["unsupported_fact"]  # a fact flag wins
+
+
+def test_prompt_asks_for_one_sentence_story_bullets():
+    assert "one resume-style sentence of at most 30 words" in SYSTEM_PROMPT
 
 
 @pytest.mark.skipif(

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Download, Gauge, Link, Maximize2, Save, Sparkles, TriangleAlert, Unlink, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Download, Gauge, Link, Maximize2, Save, Scissors, Sparkles, TriangleAlert, Unlink, X } from 'lucide-react'
 import * as api from '../api'
 import CriticPanel from '../components/CriticPanel'
 import GradeCard from '../components/GradeCard'
@@ -17,11 +17,13 @@ let nextKey = 0
 const PAGE_W = 816 // US Letter at 96dpi
 const PAGE_H = 1056
 
-// unsupported_fact = the text says something its cited source doesn't; everything else is a citation problem.
-const kindOf = (flag: string) => (flag === 'unsupported_fact' ? 'contradicts' : 'missing')
+// unsupported_fact = the text says something its cited source doesn't; story_too_long = a story copied, not
+// summarised; everything else is a citation problem.
+const kindOf = (flag: string) => (flag === 'unsupported_fact' ? 'contradicts' : flag === 'story_too_long' ? 'long' : 'missing')
 const CHIPS = {
   missing: { label: 'Missing citation', Icon: Unlink, cls: 'border-warn/50 bg-warn/10 text-warn' },
   contradicts: { label: 'Not in your saved text', Icon: TriangleAlert, cls: 'border-danger/50 bg-danger/10 text-danger' },
+  long: { label: 'Story too long: one sentence', Icon: Scissors, cls: 'border-warn/50 bg-warn/10 text-warn' },
 }
 
 const lines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean)
@@ -320,7 +322,53 @@ export default function Editor() {
     <section>
       <header className="mb-8">
         <h1 className="page-title">Editor</h1>
-        <p className="page-lede">Paste a job, tailor your bullets to it, then check every flag before saving or downloading.</p>
+        <p className="page-lede max-w-none">Paste a job, tailor your bullets to it, then check every flag before saving or downloading. Everything here is advice from a local check or an LLM; only your own words go on the resume.</p>
+        <dl className="mt-4 flex flex-col gap-2 text-sm [&_dt]:font-semibold [&_dd]:text-muted">
+          <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
+            <dt>1. Job</dt>
+            <dd>Paste the job text or fetch a link. <b>Grade fit</b> scores how well your saved experience matches (advice only) and picks the keywords the ATS score uses. <b>Tailor</b> picks and rewrites your saved bullets for this job, and works at any grade.</dd>
+          </div>
+          <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
+            <dt>Grade card</dt>
+            <dd>Score from 1 to 5, a band (Apply, Stretch or Skip), the must-haves you meet or miss with the saved text that proves each one, and your seniority fit.</dd>
+          </div>
+          <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
+            <dt>Name, contacts, summary</dt>
+            <dd>The header of the resume. Edit freely; this draft only.</dd>
+          </div>
+          <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
+            <dt>Section order</dt>
+            <dd>Move sections up or down on the resume.</dd>
+          </div>
+          <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
+            <dt>Role cards</dt>
+            <dd>One per role, with the bullets chosen for it. Tick to include a bullet, X to remove it, edit the text, and select text and press Ctrl/Cmd+B to bold. "N job terms" counts the job keywords that role covers.</dd>
+          </div>
+          <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
+            <dt>Flags</dt>
+            <dd>An amber chip means the bullet isn't tied to a saved bullet or story, or copies a whole story instead of summarising it. A red chip means it states a number, company or title your saved text doesn't. Fix the text, remove the bullet, or tick Keep anyway.</dd>
+          </div>
+          <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
+            <dt>Uncited</dt>
+            <dd>Bullets with no source. They stay off the PDF until you fix them.</dd>
+          </div>
+          <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
+            <dt>Review and save</dt>
+            <dd>Tick "I've reviewed this draft" once flags are cleared. Save in tracker stores a version; Download PDF needs the resume to fit on 1 page.</dd>
+          </div>
+          <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
+            <dt>ATS score (right)</dt>
+            <dd>An estimate, worked out on this computer, of how many job keywords your resume covers, must-haves counting double. It is not a pass or fail.</dd>
+          </div>
+          <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
+            <dt>Critic (right)</dt>
+            <dd>An LLM acting as a hiring manager: whether the draft is ready and what might cost you an interview. It never edits your text.</dd>
+          </div>
+          <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
+            <dt>Preview (right)</dt>
+            <dd>The PDF as it will print. If it runs over 1 page, it lists what to shorten or remove.</dd>
+          </div>
+        </dl>
       </header>
       {error && <p role="alert" className="alert">{error}</p>}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]">

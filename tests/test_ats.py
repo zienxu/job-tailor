@@ -74,3 +74,38 @@ def test_inline_headings_keep_their_terms_and_set_weight():
     assert not {"requirements", "preferred"} & set(terms)
     full = "python terraform aws kubernetes communication"
     assert score(job, full.replace("kubernetes", ""))["score"] < score(job, full.replace("aws", ""))["score"]
+
+
+GRADE_KEYWORDS = [{"term": "PostgreSQL", "kind": "must"}, {"term": "mentoring", "kind": "must"},
+                  {"term": "CI/CD", "kind": "nice"}, {"term": "caching", "kind": "nice"}]
+
+
+def test_grade_keywords_score_higher_than_job_terms():
+    assert score(JOB_TEXT, RESUME_TEXT, GRADE_KEYWORDS)["score"] > score(JOB_TEXT, RESUME_TEXT)["score"]
+
+
+def test_dropping_must_keyword_costs_more_than_nice():
+    full = score(JOB_TEXT, RESUME_TEXT, GRADE_KEYWORDS)["score"]
+    no_must = score(JOB_TEXT, RESUME_TEXT.replace("PostgreSQL", ""), GRADE_KEYWORDS)
+    no_nice = score(JOB_TEXT, RESUME_TEXT.replace("caching", ""), GRADE_KEYWORDS)
+    assert full > no_nice["score"] > no_must["score"]
+    assert "PostgreSQL" in no_must["missing"]
+
+
+def test_grade_keywords_replace_job_terms_for_hits():
+    terms = extract_terms(JOB_TEXT, GRADE_KEYWORDS)
+    assert terms == ["PostgreSQL", "mentoring", "CI/CD", "caching"]
+    assert hits(terms, "Led backend development") == 0  # grade keywords replace job terms
+    assert hits(terms, "Mentored engineers on PostgreSQL") == 2
+
+
+def test_malformed_grade_keywords_are_skipped():
+    bad = [{"kind": "must"}, {"term": ["x"], "kind": "must"}, "postgresql", {"term": "PostgreSQL"}]
+    assert score(JOB_TEXT, RESUME_TEXT, bad)["matched"] == ["PostgreSQL"]
+    assert score(JOB_TEXT, RESUME_TEXT, [{"kind": "must"}]) == score(JOB_TEXT, RESUME_TEXT)  # nothing usable: job terms
+
+
+def test_three_word_keyword_matches():
+    kws = [{"term": "large language models", "kind": "must"}]
+    assert score("", "Built tools on large language models.", kws)["score"] == 100
+    assert score("", "Large teams, language models.", kws)["score"] == 0

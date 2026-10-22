@@ -9,6 +9,11 @@ import re
 
 NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?%?")
 PROPER_NOUN_RE = re.compile(r"\b[A-Z][a-zA-Z]{2,}\b")
+# A sentence break is end punctuation then a capital, so "e.g. caching" stays one sentence.
+# shortcut: "U.S. Army" or "Inc. Acme" also count as a break (a false story_too_long the user can keep);
+# use an abbreviation list if real bullets trip it.
+SENTENCE_BREAK_RE = re.compile(r"[.!?]\s+[A-Z]")
+STORY_MAX_WORDS = 30
 
 
 def check_bullet(text: str, source_id: str | None, sources: dict[str, str]) -> list[str]:
@@ -28,5 +33,9 @@ def check_bullet(text: str, source_id: str | None, sources: dict[str, str]) -> l
     for word in PROPER_NOUN_RE.findall(text):
         if word.lower() not in source_lower:
             return ["unsupported_fact"]
+
+    # A story is long free text; a bullet from it must be one resume sentence, not a copy.
+    if source_id.startswith("story_") and (len(text.split()) > STORY_MAX_WORDS or SENTENCE_BREAK_RE.search(text)):
+        return ["story_too_long"]
 
     return []

@@ -170,3 +170,31 @@ def test_leadership_renders_one_line_per_role(client):
         {"name": "Drama", "role": "", "dates": "", "bullets": []}]}}).json()["html"]
     assert "<li><b>Chess Club (President):</b> a b</li>" in html
     assert "<li><b>Debate (Captain)</b></li>" in html and "<li><b>Drama</b></li>" in html and "2023" not in html
+
+
+GRADE = {"keywords": [{"term": "terraform", "kind": "must"}, {"term": "monitoring", "kind": "nice"}]}
+
+
+def _store_grade(job_id):
+    with db.connect() as conn:
+        conn.execute("UPDATE jobs SET grade = ? WHERE id = ?", (json.dumps(GRADE), job_id))
+
+
+def test_check_uses_grade_keywords_when_graded(seeded):
+    client, job_id, _, _ = seeded
+    _store_grade(job_id)
+    out = client.post(f"/jobs/{job_id}/check", json={
+        "text": "terraform", "bullets": [], "roles": {"role_1": "Ran Kubernetes and caching", "role_2": "Terraform monitoring"}}).json()
+    assert out["role_hits"] == {"role_1": 0, "role_2": 2}
+    assert out["ats"]["score"] == 67 and out["ats"]["missing"] == ["monitoring"]
+
+
+def test_tailor_ranks_bullets_by_grade_keywords(seeded):
+    client, job_id, role, bullet = seeded
+    _store_grade(job_id)
+    texts = ["Used kubernetes and caching.", "Set up kubernetes caching.", "Ran caching for kubernetes.", "Wrote terraform."]
+    llm_out = json.dumps({"bullets": [{"text": t, "source_id": bullet} for t in texts]})
+    with patch("src.api.tailor.llm.complete", return_value=llm_out):
+        out = client.post(f"/jobs/{job_id}/tailor").json()
+    included = [b["text"] for b in out["bullets"] if b["included"]]
+    assert "Wrote terraform." in included and len(included) == 3

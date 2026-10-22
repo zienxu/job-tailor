@@ -47,6 +47,22 @@ async function tailored() {
   return user
 }
 
+test('the intro explains the editor sections', () => {
+  render(<Editor />)
+  for (const t of ['Grade card', 'Role cards', 'Flags', 'ATS score (right)', 'Critic (right)']) expect(screen.getByText(t)).toBeInTheDocument()
+})
+
+test('a copied story bullet shows the too-long chip', async () => {
+  m.tailor.mockResolvedValue({ bullets: [{ text: 'A whole story. Copied in.', source_id: 'story_1', role_id: 'role_1', flags: ['story_too_long'] }] })
+  m.check.mockImplementation(async (_id, _text, bullets, roles) => ({
+    ats: { label: 'local estimate', score: 50, matched: [], missing: [] },
+    role_hits: Object.fromEntries(Object.keys(roles).map((k) => [k, 0])),
+    flags: bullets.map(() => ['story_too_long']),
+  }))
+  await tailored()
+  expect(await screen.findByText('Story too long: one sentence')).toHaveAttribute('data-flag', 'long')
+})
+
 test('typing a missing keyword raises the score', async () => {
   const user = await tailored()
   await waitFor(() => expect(screen.getByTestId('ats-score')).toHaveTextContent('50%'))

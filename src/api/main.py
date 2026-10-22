@@ -184,6 +184,12 @@ def get_job(id: int, conn=Depends(get_conn)):
     return _job(_get(conn, "jobs", id))
 
 
+def _keywords(job: dict) -> list | None:
+    """The job's stored grade keywords, or None when ungraded (ATS then falls back to the job's own terms)."""
+    grade = _job(job)["grade"]
+    return grade.get("keywords") if isinstance(grade, dict) else None
+
+
 @app.post("/jobs/{id}/grade")
 def grade_job(id: int, conn=Depends(get_conn)):
     job = _get(conn, "jobs", id)
@@ -207,7 +213,7 @@ def tailor_job(id: int, conn=Depends(get_conn)):
     job = _get(conn, "jobs", id)
     profile = db.load_profile(conn)
     try:
-        result = tailor(job["text"], profile)
+        result = tailor(job["text"], profile, _keywords(job))
     except Exception as e:  # LLM call failed; never echo prompt or profile
         raise HTTPException(502, f"LLM call failed: {type(e).__name__}")
     # This job now owns the editor; drop other runs never saved to the tracker so they don't pile up.
@@ -237,8 +243,9 @@ class CheckReq(BaseModel):
 def check_draft(id: int, body: CheckReq, conn=Depends(get_conn)):
     job = _get(conn, "jobs", id)
     sources = _sources(db.load_profile(conn))
-    terms = ats.extract_terms(job["text"])
-    return {"ats": ats.score(job["text"], body.text),
+    keywords = _keywords(job)
+    terms = ats.extract_terms(job["text"], keywords)
+    return {"ats": ats.score(job["text"], body.text, keywords),
             "role_hits": {k: ats.hits(terms, text) for k, text in body.roles.items()},
             "flags": [check_bullet(b.text, b.source_id, sources) for b in body.bullets]}
 
@@ -300,7 +307,8 @@ class Render(BaseModel):
 @app.post("/preview")
 def preview(body: Render, conn=Depends(get_conn)):  # plain def: render_pdf uses sync Playwright
     resume = body.resume.model_dump()
-    terms = ats.extract_terms(_get(conn, "jobs", body.job_id)["text"]) if body.job_id is not None else []
+    job = _get(conn, "jobs", body.job_id) if body.job_id is not None else None
+    terms = ats.extract_terms(job["text"], _keywords(job)) if job else []
     fit = pdf.page_fit(resume, pdf.render_pdf(resume), set(body.fallback), terms)
     return {"html": pdf.render_html(resume, base=PREVIEW_BASE), **fit}
 
