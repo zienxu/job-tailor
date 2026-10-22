@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import { RefreshCw } from 'lucide-react'
-import type { Grade } from '../api'
+import type { Grade, Requirement } from '../api'
 
 const BAND_CLS = { Apply: 'border-accent/50 bg-accent/10 text-accent', Stretch: 'border-warn/50 bg-warn/10 text-warn', Skip: 'border-danger/50 bg-danger/10 text-danger' }
 const STATUS_CLS = { met: 'text-accent', partial: 'text-warn', missing: 'text-danger' }
@@ -41,20 +41,30 @@ export default function GradeCard({ grade, loading, error, onRegrade }: Props) {
           )}
           {grade.summary && <p className="mt-2 text-sm" data-testid="grade-summary">{grade.summary}</p>}
           {grade.seniority_fit && <p className="mt-1 text-xs text-muted" data-testid="grade-seniority">{SENIORITY[grade.seniority_fit]}</p>}
-          <h3 className="mt-3 text-sm font-medium text-muted">Must-haves</h3>
-          <ul className="mt-1 flex flex-col gap-2 text-sm">
-            {musts.map((r, i) => (
-              <li key={i} data-status={r.status}>
-                <span className={`font-semibold ${STATUS_CLS[r.status]}`}>{r.status}</span> {r.text}
-                {r.hard_gate && <span className="ml-1.5 rounded border border-line px-1 text-xs text-muted">hard requirement</span>}
-                {r.status !== 'missing' && r.evidence?.length > 0 && (
-                  <ul className="ml-4 list-disc text-muted">{r.evidence.map((t, j) => <li key={j}>{t}</li>)}</ul>
-                )}
-              </li>
-            ))}
-          </ul>
+          <Requirements title="Must-haves" reqs={musts} />
+          <Requirements title="Nice-to-haves" reqs={grade.requirements.filter((r) => r.kind === 'nice')} />
         </>
       )}
     </section>
+  )
+}
+
+function Requirements({ title, reqs }: { title: string; reqs: Requirement[] }) {
+  if (!reqs.length) return null
+  return (
+    <>
+      <h3 className="mt-3 text-sm font-medium text-muted">{title}</h3>
+      <ul className="mt-1 flex flex-col gap-2 text-sm">
+        {reqs.map((r, i) => (
+          <li key={i} data-status={r.status}>
+            <span className={`font-semibold ${STATUS_CLS[r.status]}`}>{r.status}</span> {r.text}
+            {r.hard_gate && <span className="ml-1.5 rounded border border-line px-1 text-xs text-muted">hard requirement</span>}
+            {r.status !== 'missing' && Array.isArray(r.evidence) && r.evidence.length > 0 && (
+              <ul className="ml-4 list-disc text-muted">{r.evidence.map((t, j) => <li key={j}>{t}</li>)}</ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
   )
 }

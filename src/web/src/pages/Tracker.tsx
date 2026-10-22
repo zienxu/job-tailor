@@ -8,6 +8,44 @@ const STATUSES: api.Status[] = ['saved', 'applied', 'interview', 'offer', 'rejec
 const when = (utc: string) => new Date(utc.replace(' ', 'T') + 'Z').toLocaleString()
 const today = () => new Date().toLocaleDateString('en-CA') // local YYYY-MM-DD; toISOString would give the UTC date
 
+// Derived from the stored grade, not saved: each cited story or bullet once, with the requirements it proves.
+function InterviewPrep({ grade }: { grade: api.Grade }) {
+  const items = new Map<string, { text: string; reqs: api.Requirement[] }>()
+  for (const r of grade.requirements) {
+    if (r.status === 'missing') continue
+    ;(Array.isArray(r.evidence_ids) ? r.evidence_ids : []).forEach((id, i) => {
+      if (!/^(story|bullet)_/.test(id)) return
+      const item = items.get(id) ?? { text: r.evidence?.[i] ?? 'Saved item (re-grade to see its text)', reqs: [] } // 8b grades have no evidence text
+      if (!item.reqs.includes(r)) item.reqs.push(r)
+      items.set(id, item)
+    })
+  }
+  const stories = [...items.values()].sort((a, b) => b.reqs.length - a.reqs.length)
+  const gaps = grade.requirements.filter((r) => r.status === 'missing').sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'must' ? -1 : 1))
+  if (!stories.length && !gaps.length) return null
+  return (
+    <section className="record mt-4" aria-label="Interview prep">
+      <h2 className="text-sm font-semibold text-muted">Interview prep</h2>
+      {stories.length > 0 && (
+        <ul className="mt-2 flex flex-col gap-2 text-sm">
+          {stories.map((s, i) => (
+            <li key={i}>
+              {s.text}
+              <p className="text-xs text-muted">covers: {s.reqs.map((r) => `${r.text} (${r.kind}${r.status === 'partial' ? ', partial' : ''})`).join(', ')}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {gaps.length > 0 && (
+        <>
+          <h3 className="mt-3 text-sm font-medium text-muted">Gaps to prepare for</h3>
+          <ul className="mt-1 list-disc pl-5 text-sm">{gaps.map((r, i) => <li key={i}>{r.text} ({r.kind})</li>)}</ul>
+        </>
+      )}
+    </section>
+  )
+}
+
 export default function Tracker() {
   const [jobs, setJobs] = useState<api.Job[]>([])
   const [error, setError] = useState('')
@@ -157,6 +195,7 @@ export default function Tracker() {
                             </div>
                           </div>
                           {j.grade && <div className="mt-4"><GradeCard grade={j.grade} /></div>}
+                          {j.grade && <InterviewPrep grade={j.grade} />}
                           <details className="mt-4 text-sm">
                             <summary className="cursor-pointer text-muted">Job text</summary>
                             <p className="mt-2 whitespace-pre-wrap">{j.text}</p>

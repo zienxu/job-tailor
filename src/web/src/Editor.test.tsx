@@ -308,6 +308,7 @@ const grade = (band: api.Grade['band'] = 'Skip', score = 2.4): api.Grade => ({
     { text: 'Python', kind: 'must', hard_gate: false, status: 'met', evidence_ids: ['bullet_1'], evidence: ['Wrote Python services'] },
     { text: 'Kubernetes', kind: 'must', hard_gate: false, status: 'missing', evidence_ids: [], evidence: [] },
     { text: 'Go', kind: 'nice', hard_gate: false, status: 'missing', evidence_ids: [], evidence: [] },
+    { text: 'Docker', kind: 'nice', hard_gate: false, status: 'met', evidence_ids: ['story_1'], evidence: ['Shipped containers'] },
   ],
 })
 
@@ -331,7 +332,9 @@ test('grading a pasted job shows score, band and must-haves with evidence', asyn
   expect(met).toHaveAttribute('data-status', 'met')
   expect(within(met).getByText('Wrote Python services')).toBeInTheDocument()
   expect(card.getByText('Kubernetes').closest('li')).toHaveAttribute('data-status', 'missing')
-  expect(card.queryByText('Go')).not.toBeInTheDocument() // must-haves only
+  expect(card.getByText('Nice-to-haves')).toBeInTheDocument()
+  expect(card.getByText('Go').closest('li')).toHaveAttribute('data-status', 'missing')
+  expect(within(card.getByText('Docker').closest('li')!).getByText('Shipped containers')).toBeInTheDocument()
   expect(m.gradeJob).toHaveBeenCalledWith(5)
 })
 

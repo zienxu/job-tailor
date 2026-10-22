@@ -76,6 +76,33 @@ test('each row shows its band, blank when ungraded, and the stored grade without
 
   await userEvent.setup().click(screen.getByRole('button', { name: 'Details for Graded' }))
   expect(screen.getByText('3.4 / 5')).toBeInTheDocument()
-  expect(screen.getByText('Wrote Python services')).toBeInTheDocument()
+  expect(within(screen.getByRole('region', { name: /Fit grade/ })).getByText('Wrote Python services')).toBeInTheDocument()
   expect(m.gradeJob).not.toHaveBeenCalled()
+})
+
+test('interview prep lists cited stories and bullets by coverage, then the gaps', async () => {
+  const req = (text: string, kind: 'must' | 'nice', status: api.Requirement['status'], evidence_ids: string[], evidence: string[]): api.Requirement =>
+    ({ text, kind, hard_gate: false, status, evidence_ids, evidence })
+  const grade: api.Grade = { score: 3.4, band: 'Stretch', keywords: [], requirements: [
+    req('Python', 'must', 'met', ['bullet_2', 'skill_1'], ['Wrote Python services', 'Python']),
+    req('Kafka', 'must', 'met', ['story_1'], ['Migrated billing to Kafka']),
+    req('Mentoring', 'nice', 'partial', ['story_1'], ['Migrated billing to Kafka']),
+    req('Go', 'nice', 'missing', [], []),
+    req('Kubernetes', 'must', 'missing', [], []),
+  ] }
+  m.listJobs.mockResolvedValue([job({ grade }), job({ id: 2, company: 'Plain', grade: null })])
+  const user = userEvent.setup()
+  render(<Tracker />)
+
+  await user.click(await screen.findByRole('button', { name: 'Details for Acme' }))
+  const prep = within(screen.getByRole('region', { name: 'Interview prep' }))
+  const items = prep.getAllByRole('listitem')
+  expect(items[0]).toHaveTextContent('Migrated billing to Kafka')
+  expect(items[0]).toHaveTextContent('covers: Kafka (must), Mentoring (nice, partial)')
+  expect(items[1]).toHaveTextContent('Wrote Python services')
+  expect(items).toHaveLength(4) // the skill_1 citation is not a story
+  expect(items.slice(2).map((li) => li.textContent)).toEqual(['Kubernetes (must)', 'Go (nice)'])
+
+  await user.click(screen.getByRole('button', { name: 'Details for Plain' }))
+  expect(screen.queryByRole('region', { name: 'Interview prep' })).not.toBeInTheDocument()
 })
