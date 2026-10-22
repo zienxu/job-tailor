@@ -109,6 +109,7 @@ def test_grade_stored_and_education_and_skills_reach_prompt(client):
     for text in ("NUS", "BComp", "Dean's list", f"bullet_{bid}", "Python, Go", f"skill_{sid}"):
         assert text in captured["prompt"]
     assert (r.json()["score"], r.json()["band"]) == (5.0, "Apply")
+    assert [q["evidence"] for q in r.json()["requirements"]] == [["NUS, BComp"], ["Languages: Python, Go"]]
     assert client.get(f"/jobs/{job_id}").json()["grade"] == r.json()
     client.post(f"/jobs/{job_id}/versions", json={"content": {"bullets": []}})
     assert client.get("/jobs").json()[0]["grade"] == r.json()
@@ -123,3 +124,22 @@ def test_old_db_without_grade_migrates(client):
         old.commit()
     job = client.get("/jobs/1").json()
     assert (job["text"], job["grade"]) == ("Old job", None)
+
+
+def test_eligibility_facts_reach_only_the_grade(client):
+    fid = client.post("/entries", json={"section": "eligibility", "label": "Work eligibility",
+                                        "text": "Singapore Citizen; available from 2027"}).json()["id"]
+    job_id = client.post("/jobs", json={"text": "Singapore Citizen or PR only"}).json()["id"]
+    captured = {}
+
+    def fake(system_prompt, user_prompt):
+        captured["prompt"] = user_prompt
+        return _mock([_req("must", "met", [f"fact_{fid}"], gate=True)])
+
+    with patch("src.api.fit.llm.complete", side_effect=fake):
+        r = client.post(f"/jobs/{job_id}/grade").json()
+    assert "Singapore Citizen; available from 2027" in captured["prompt"]
+    assert r["requirements"][0]["status"] == "met" and r["band"] == "Apply"
+    assert r["requirements"][0]["evidence"] == ["Work eligibility: Singapore Citizen; available from 2027"]
+    with closing(db.connect()) as conn:
+        assert "facts" not in db.load_profile(conn)  # the tailor's profile

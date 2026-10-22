@@ -9,6 +9,7 @@ let nextTmp = 0 // stable React key for unsaved forms
 const LABELS: Record<api.Section, { heading: string; lede: string; add: string }> = {
   leadership: { heading: 'Leadership', lede: 'Leadership and activities, copied to the resume as saved.', add: 'Add leadership' },
   skills: { heading: 'Skills', lede: 'Skill groups, copied to the resume as saved.', add: 'Add skill group' },
+  eligibility: { heading: 'Eligibility', lede: 'Facts for the fit grade only: work authorisation, start date, experience level. Never on the resume.', add: 'Add fact' },
 }
 
 export default function Entries({ section }: { section: api.Section }) {

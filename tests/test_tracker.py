@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from unittest.mock import patch
 
@@ -111,11 +112,15 @@ def test_applied_at_must_be_a_date(client):
     assert client.put(f"/jobs/{job_id}", json={"applied_at": ""}).status_code == 200
 
 
-def test_new_job_drops_unsaved_ones(client):
+def test_tailor_drops_other_unsaved_jobs(client):
     kept = _job(client)
     _version(client, kept)
     unsaved = _job(client)
     latest = _job(client)
+    assert client.get(f"/jobs/{unsaved}").status_code == 200  # creating a job (e.g. to grade it) deletes nothing
+    out = json.dumps({"bullets": [{"text": "x", "source_id": None}]})
+    with patch("src.api.tailor.llm.complete", return_value=out):
+        assert client.post(f"/jobs/{latest}/tailor").status_code == 200
     assert client.get(f"/jobs/{unsaved}").status_code == 404
     assert client.get(f"/jobs/{kept}").status_code == 200
     assert client.get(f"/jobs/{latest}").status_code == 200

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Download, Maximize2, Save, Sparkles, TriangleAlert, Unlink, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Download, Gauge, Link, Maximize2, Save, Sparkles, TriangleAlert, Unlink, X } from 'lucide-react'
 import * as api from '../api'
 import CriticPanel from '../components/CriticPanel'
+import GradeCard from '../components/GradeCard'
 import ScorePanel from '../components/ScorePanel'
 import BoldTextarea from '../components/BoldTextarea'
 
@@ -60,6 +61,13 @@ export default function Editor() {
   const [roles, setRoles] = useState<api.Role[]>([])
   const [jobText, setJobText] = useState('')
   const [jobId, setJobId] = useState<number | null>(null)
+  const [jobLink, setJobLink] = useState('')
+  const [meta, setMeta] = useState<api.JobMeta>() // company, title and link from the last fetched link
+  const [grade, setGrade] = useState<api.Grade | null>(null)
+  const [gradeError, setGradeError] = useState('')
+  const [grading, setGrading] = useState(false)
+  // The job the grade card belongs to; Tailor reuses it, since a new POST /jobs deletes unsaved jobs.
+  const graded = useRef<{ id: number; text: string } | null>(null)
   const [name, setName] = useState('')
   const [contacts, setContacts] = useState('')
   const [summary, setSummary] = useState('')
@@ -155,15 +163,45 @@ export default function Editor() {
     if (jobRef.current === id) setCriticLoading(false)
   }
 
+  async function runGrade(text = jobText, m = meta) {
+    if (!text.trim()) return setError('Paste the job text first')
+    setGrading(true)
+    setGradeError('')
+    try {
+      if (graded.current?.text !== text) graded.current = { id: (await api.createJob(text, m)).id, text }
+      setGrade(await api.gradeJob(graded.current.id))
+    } catch (e) {
+      setGradeError((e as Error).message) // advice only: Tailor stays enabled
+    }
+    setGrading(false)
+  }
+
+  async function runFetch() {
+    if (!jobLink.trim()) return setError('Paste a job link first')
+    setGrading(true)
+    setError('')
+    try {
+      const { text, ...m } = await api.fetchJob(jobLink)
+      setJobText(text)
+      setMeta(m)
+      setGrade(null)
+      await runGrade(text, m)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+    setGrading(false)
+  }
+
   async function runTailor() {
     if (!jobText.trim()) return setError('Paste the job text first')
     setBusy(true)
     setError('')
     try {
-      const job = await api.createJob(jobText)
+      const job = graded.current?.text === jobText ? graded.current : await api.createJob(jobText, meta)
       const out = await api.tailor(job.id)
       const bs = out.bullets.map((b) => ({ ...b, included: b.included ?? true, key: nextKey++ }))
       jobRef.current = job.id
+      graded.current = { id: job.id, text: jobText } // tailoring deleted every other unsaved job
       setJobId(job.id)
       saves.current = 0
       setBullets(bs)
@@ -288,11 +326,26 @@ export default function Editor() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_28rem]">
         <div className="flex min-w-0 flex-col gap-5">
           <div className="record">
-            <label className="label">Job text<textarea className="field" rows={6} value={jobText} onChange={(e) => setJobText(e.target.value)} /></label>
-            <button type="button" className="btn btn-primary mt-4" disabled={busy} onClick={runTailor}>
-              <Sparkles aria-hidden size={16} />{busy && jobId === null ? 'Tailoring...' : 'Tailor'}
-            </button>
+            <div className="mb-4 flex items-end gap-2">
+              <label className="label flex-1">Job link<input className="field" type="url" value={jobLink} onChange={(e) => { setJobLink(e.target.value); setMeta(undefined) }} /></label>
+              <button type="button" className="btn btn-secondary" disabled={grading} onClick={runFetch}>
+                <Link aria-hidden size={16} />Fetch
+              </button>
+            </div>
+            <label className="label">Job text<textarea className="field" rows={6} value={jobText} onChange={(e) => { setJobText(e.target.value); setMeta(undefined); setGrade(null); setGradeError('') }} /></label>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" className="btn btn-secondary" disabled={grading} onClick={() => runGrade()}>
+                <Gauge aria-hidden size={16} />Grade fit
+              </button>
+              {/* Never gated on the grade: the band is advice only. */}
+              <button type="button" className="btn btn-primary" disabled={busy} onClick={runTailor}>
+                <Sparkles aria-hidden size={16} />{busy && jobId === null ? 'Tailoring...' : 'Tailor'}
+              </button>
+            </div>
           </div>
+          {(grade || grading || gradeError) && (
+            <GradeCard grade={grade} loading={grading} error={gradeError} onRegrade={() => runGrade()} />
+          )}
           <div className="record flex flex-col gap-4">
             <label className="label">Name<input className="field" value={name} onChange={(e) => setName(e.target.value)} /></label>
             <label className="label">Contacts (one per line)<textarea className="field" rows={3} value={contacts} onChange={(e) => setContacts(e.target.value)} /></label>

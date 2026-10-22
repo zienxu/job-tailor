@@ -4,13 +4,16 @@ export type Role = RoleFields & { id: number }
 export type ItemFields = { role_id: number; text: string }
 export type Bullet = ItemFields & { id: number; position: number }
 export type Story = ItemFields & { id: number }
-export type Section = 'leadership' | 'skills'
+export type Section = 'leadership' | 'skills' | 'eligibility'
 export type EntryFields = { section: Section; label: string; text: string }
 export type Entry = EntryFields & { id: number }
 
 export type Status = 'saved' | 'applied' | 'interview' | 'offer' | 'rejected'
 export type JobFields = { company: string; title: string; link: string; status: Status; applied_at: string; notes: string; version_id: number | null }
-export type Job = JobFields & { id: number; text: string; created_at?: string; versions?: { id: number; created_at: string }[] }
+export type Requirement = { text: string; kind: 'must' | 'nice'; hard_gate: boolean; status: 'met' | 'partial' | 'missing'; evidence_ids: string[]; evidence: string[] }
+export type Grade = { score: number; band: 'Apply' | 'Stretch' | 'Skip'; requirements: Requirement[]; keywords: { term: string; kind: 'must' | 'nice' }[] }
+export type JobMeta = { company: string; title: string; link: string }
+export type Job = JobFields & { id: number; text: string; created_at?: string; versions?: { id: number; created_at: string }[]; grade?: Grade | null }
 export type DraftBullet = { text: string; source_id: string | null; role_id: string | null; flags: string[]; fallback?: boolean; included?: boolean }
 export type Ats = { label: string; score: number; matched: string[]; missing: string[] }
 export type Note = { text: string; reason: string }
@@ -77,7 +80,9 @@ export const updateEntry = (id: number, e: EntryFields) => req<Entry>('PUT', `/e
 export const deleteEntry = (id: number) => req<void>('DELETE', `/entries/${id}`)
 export const swapEntries = (a: number, b: number) => req<void>('POST', `/entries/${a}/swap/${b}`)
 
-export const createJob = (text: string) => req<Job>('POST', '/jobs', { text })
+export const createJob = (text: string, meta?: JobMeta) => req<Job>('POST', '/jobs', { text, ...meta })
+export const fetchJob = (url: string) => req<JobMeta & { text: string }>('POST', '/jobs/fetch', { url })
+export const gradeJob = (id: number) => req<Grade>('POST', `/jobs/${id}/grade`)
 export const listJobs = () => req<Job[]>('GET', '/jobs')
 export const updateJob = (id: number, j: JobFields) => req<Job>('PUT', `/jobs/${id}`, j)
 export const deleteJob = (id: number) => req<void>('DELETE', `/jobs/${id}`)

@@ -58,7 +58,7 @@ Paste research blocks here. One block per research session, newest first.
 | Lever | FETCH OK | Official Postings API; postings "may be scraped by third parties"; 1 req/s | api.lever.co/v0/postings/{site}?mode=json |
 | Workday | FETCH per link, expect breakage | /wday/cxs endpoint is public but undocumented; can change; maintenance redirects | Fall back to pasting text |
 
-Rule: a server-side fetch of a URL counts as automated access. "Paste a link" is only allowed for FETCH OK sources.
+Rule: a server-side fetch of a URL counts as automated access. "Paste a link" was only allowed for FETCH OK sources; on 2026-10-22 the user chose to accept the ToS risk and read any single pasted link once (spec 8c2). The verdicts above still describe each site's terms.
 
 ## LLM data handling (free tiers)
 | Option | Trains on / retains your data? | Note |

@@ -63,3 +63,19 @@ test('the row of the latest save is marked with its job number', async () => {
   expect(within(row).getByText('2')).toBeInTheDocument() // newest-first list of 2, so this is row 2
   expect(screen.getAllByText('latest save')).toHaveLength(1)
 })
+
+test('each row shows its band, blank when ungraded, and the stored grade without a new call', async () => {
+  const grade: api.Grade = { score: 3.4, band: 'Stretch', keywords: [], requirements: [
+    { text: 'Python', kind: 'must', hard_gate: false, status: 'met', evidence_ids: ['bullet_1'], evidence: ['Wrote Python services'] }] }
+  m.listJobs.mockResolvedValue([job({ id: 2, company: 'Graded', grade }), job({ company: 'Plain', grade: null })])
+  render(<Tracker />)
+
+  const [graded, plain] = await screen.findAllByTestId('fit')
+  expect(graded).toHaveTextContent('Stretch')
+  expect(plain).toHaveTextContent(/^$/)
+
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Details for Graded' }))
+  expect(screen.getByText('3.4 / 5')).toBeInTheDocument()
+  expect(screen.getByText('Wrote Python services')).toBeInTheDocument()
+  expect(m.gradeJob).not.toHaveBeenCalled()
+})

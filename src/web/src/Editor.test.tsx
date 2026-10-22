@@ -285,3 +285,125 @@ test('the readiness verdict shows and "needs_work" does not block download', asy
   await user.click(screen.getByLabelText("I've reviewed this draft"))
   await waitFor(() => expect(screen.getByRole('button', { name: /Download PDF/ })).toBeEnabled())
 })
+
+const grade = (band: api.Grade['band'] = 'Skip', score = 2.4): api.Grade => ({
+  score, band, keywords: [],
+  requirements: [
+    { text: 'Python', kind: 'must', hard_gate: false, status: 'met', evidence_ids: ['bullet_1'], evidence: ['Wrote Python services'] },
+    { text: 'Kubernetes', kind: 'must', hard_gate: false, status: 'missing', evidence_ids: [], evidence: [] },
+    { text: 'Go', kind: 'nice', hard_gate: false, status: 'missing', evidence_ids: [], evidence: [] },
+  ],
+})
+
+async function gradedJob() {
+  const user = userEvent.setup()
+  render(<Editor />)
+  await user.click(screen.getByLabelText('Job text'))
+  await user.paste('Need Python and kubernetes')
+  await user.click(screen.getByRole('button', { name: 'Grade fit' }))
+  return user
+}
+
+test('grading a pasted job shows score, band and must-haves with evidence', async () => {
+  m.gradeJob.mockResolvedValue(grade())
+  await gradedJob()
+
+  expect(await screen.findByTestId('grade-score')).toHaveTextContent('2.4 / 5')
+  expect(screen.getByTestId('grade-band')).toHaveTextContent('Skip')
+  const card = within(screen.getByRole('region', { name: /Fit grade/ }))
+  const met = card.getByText('Python').closest('li')!
+  expect(met).toHaveAttribute('data-status', 'met')
+  expect(within(met).getByText('Wrote Python services')).toBeInTheDocument()
+  expect(card.getByText('Kubernetes').closest('li')).toHaveAttribute('data-status', 'missing')
+  expect(card.queryByText('Go')).not.toBeInTheDocument() // must-haves only
+  expect(m.gradeJob).toHaveBeenCalledWith(5)
+})
+
+test('Tailor is enabled on a Skip band and reuses the graded job', async () => {
+  m.gradeJob.mockResolvedValue(grade('Skip'))
+  const user = await gradedJob()
+  await screen.findByTestId('grade-band')
+
+  const tailorBtn = screen.getByRole('button', { name: 'Tailor' })
+  expect(tailorBtn).toBeEnabled()
+  await user.click(tailorBtn)
+  await screen.findByLabelText('Bullet 1')
+  expect(m.createJob).toHaveBeenCalledTimes(1)
+  expect(m.tailor).toHaveBeenCalledWith(5)
+})
+
+test('Re-grade calls the grade endpoint again and replaces the card', async () => {
+  m.gradeJob.mockResolvedValueOnce(grade('Skip', 2.4)).mockResolvedValueOnce(grade('Apply', 4.2))
+  const user = await gradedJob()
+  await screen.findByText('2.4 / 5')
+
+  await user.click(screen.getByRole('button', { name: 'Re-grade' }))
+  expect(await screen.findByText('4.2 / 5')).toBeInTheDocument()
+  expect(m.gradeJob).toHaveBeenCalledTimes(2)
+  expect(m.gradeJob).toHaveBeenLastCalledWith(5)
+  expect(m.createJob).toHaveBeenCalledTimes(1)
+})
+
+test('a grade error shows and Tailor still works', async () => {
+  m.gradeJob.mockRejectedValue(new Error('POST /jobs/5/grade failed: 502'))
+  const user = await gradedJob()
+
+  expect(await screen.findByText(/Grade failed/)).toBeInTheDocument()
+  const tailorBtn = screen.getByRole('button', { name: 'Tailor' })
+  expect(tailorBtn).toBeEnabled()
+  await user.click(tailorBtn)
+  expect(await screen.findByLabelText('Bullet 1')).toBeInTheDocument()
+})
+
+test('fetching a link fills the job text and grades it', async () => {
+  m.fetchJob.mockResolvedValue({ text: 'Fetched job: Python', company: 'Acme', title: 'SWE', link: 'https://boards.greenhouse.io/acme/jobs/1' })
+  m.gradeJob.mockResolvedValue(grade())
+  const user = userEvent.setup()
+  render(<Editor />)
+  await user.type(screen.getByLabelText(/Job link/), 'https://boards.greenhouse.io/acme/jobs/1')
+  await user.click(screen.getByRole('button', { name: 'Fetch' }))
+
+  expect(await screen.findByTestId('grade-band')).toHaveTextContent('Skip')
+  expect(screen.getByLabelText('Job text')).toHaveValue('Fetched job: Python')
+  expect(m.createJob).toHaveBeenCalledWith('Fetched job: Python', { company: 'Acme', title: 'SWE', link: 'https://boards.greenhouse.io/acme/jobs/1' })
+})
+
+test('grading after Tailor reuses the tailored job instead of making one', async () => {
+  m.gradeJob.mockResolvedValue(grade())
+  const user = await tailored()
+  await user.click(screen.getByRole('button', { name: 'Grade fit' }))
+  await screen.findByTestId('grade-band')
+  expect(m.createJob).toHaveBeenCalledTimes(1)
+  expect(m.gradeJob).toHaveBeenCalledWith(5)
+})
+
+test('the grade card shows the band thresholds and when a hard requirement held it at Stretch', async () => {
+  m.gradeJob.mockResolvedValue({ score: 4.2, band: 'Stretch', keywords: [], requirements: [
+    { text: 'Singapore Citizen or PR', kind: 'must', hard_gate: true, status: 'missing', evidence_ids: [], evidence: [] },
+    { text: 'Python', kind: 'must', hard_gate: false, status: 'met', evidence_ids: ['bullet_1'], evidence: ['Wrote Python'] },
+  ] })
+  await gradedJob()
+
+  expect(await screen.findByText('Apply ≥ 3.8 · Stretch 3.0–3.7 · Skip below 3.0')).toBeInTheDocument()
+  expect(screen.getByTestId('grade-gated')).toHaveTextContent('Held at Stretch: a hard requirement is missing (Singapore Citizen or PR)')
+  expect(screen.getByText('hard requirement')).toBeInTheDocument()
+})
+
+test('a low score with a missing hard requirement has no "held" note', async () => {
+  m.gradeJob.mockResolvedValue({ ...grade('Skip', 2.4), requirements: [
+    { text: 'Singapore Citizen or PR', kind: 'must', hard_gate: true, status: 'missing', evidence_ids: [], evidence: [] }] })
+  await gradedJob()
+  await screen.findByTestId('grade-band')
+  expect(screen.queryByTestId('grade-gated')).not.toBeInTheDocument()
+})
+
+test('eligibility facts never appear in the editor', async () => {
+  m.listEntries.mockResolvedValue([
+    { id: 2, section: 'skills', label: 'Languages', text: 'Python' },
+    { id: 3, section: 'eligibility', label: 'Work eligibility', text: 'Singapore Citizen' },
+  ])
+  render(<Editor />)
+  expect(await screen.findByLabelText('Languages text')).toBeInTheDocument()
+  expect(screen.queryByText(/Work eligibility/)).not.toBeInTheDocument()
+  expect(screen.queryByDisplayValue('Singapore Citizen')).not.toBeInTheDocument()
+})

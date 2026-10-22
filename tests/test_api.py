@@ -118,6 +118,10 @@ def test_entries_crud_round_trip(client):
     assert client.post("/entries", json={"section": "leadership", "label": "P", "text": "x"}).status_code == 422
     assert client.post("/entries", json={"section": "hobbies", "label": "a", "text": "b"}).status_code == 422
     assert client.post("/entries", json={"section": "skills", "label": " ", "text": "b"}).status_code == 422
+    # A grade-only eligibility fact can't be moved into skills (which prints on the resume).
+    fact = client.post("/entries", json={"section": "eligibility", "label": "Citizenship", "text": "SG"}).json()["id"]
+    assert client.put(f"/entries/{fact}", json={"section": "skills", "label": "C", "text": "SG"}).status_code == 422
+    assert client.put(f"/entries/{fact}", json={"section": "eligibility", "label": "C", "text": "SG"}).status_code == 200
     assert client.delete(f"/entries/{eid}").status_code == 204
     assert client.get(f"/entries/{eid}").status_code == 404
 

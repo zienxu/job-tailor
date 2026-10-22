@@ -57,7 +57,7 @@ class Bullet(Item):
 
 
 class Entry(BaseModel):
-    section: Literal["skills"]  # leadership moved to roles in step 7c2b
+    section: Literal["skills", "eligibility"]  # leadership moved to roles in step 7c2b; eligibility is grade-only
     label: NonBlank
     text: NonBlank
 
@@ -113,9 +113,12 @@ def _crud(table: str, Model: type[BaseModel]) -> None:
 
     @app.put(f"/{table}/{{id}}")
     def update(id: int, body: Model, conn=Depends(get_conn)):
-        _get(conn, table, id)
+        row = _get(conn, table, id)
         # Only fields sent are written, so e.g. a PUT without kind can't turn a project into experience.
         fields = body.model_dump(exclude_unset=True)
+        # A grade-only eligibility fact must never become a skills entry that prints on the resume.
+        if table == "entries" and fields.get("section", row["section"]) != row["section"]:
+            raise HTTPException(422, "an entry can't change section")
         _write(conn, f"UPDATE {table} SET {', '.join(c + ' = ?' for c in fields)} WHERE id = ?",
                [*fields.values(), id])
         return _get(conn, table, id)
@@ -153,8 +156,6 @@ def _job(row) -> dict:
 
 @app.post("/jobs", status_code=201)
 def create_job(body: Job, conn=Depends(get_conn)):
-    # Each Tailor run makes a job; drop earlier runs never saved to the tracker so they don't pile up.
-    conn.execute("DELETE FROM jobs WHERE NOT EXISTS (SELECT 1 FROM resume_versions v WHERE v.job_id = jobs.id)")
     cur = _write(conn, "INSERT INTO jobs (text, company, title, link) VALUES (?, ?, ?, ?)",
                  (body.text, body.company, body.title, body.link))
     return _job(_get(conn, "jobs", cur.lastrowid))
@@ -186,10 +187,17 @@ def get_job(id: int, conn=Depends(get_conn)):
 @app.post("/jobs/{id}/grade")
 def grade_job(id: int, conn=Depends(get_conn)):
     job = _get(conn, "jobs", id)
+    profile = db.load_profile(conn, full=True)
     try:
-        result = grade(job["text"], db.load_profile(conn, full=True))
+        result = grade(job["text"], profile)
     except Exception as e:  # LLM call failed or bad response; store nothing, never echo prompt or profile
         raise HTTPException(502, f"grade failed: {type(e).__name__}")
+    # The card shows the cited saved text; a snapshot at grade time, refreshed by re-grading.
+    text_of = {r["id"]: f"{r['company']}, {r['title']}" for r in profile["roles"]}
+    text_of |= {x["id"]: x["text"] for x in profile["bullets"] + profile["stories"]}
+    text_of |= {s["id"]: f"{s['label']}: {s['text']}" for s in profile["skills"] + profile["facts"]}
+    for r in result["requirements"]:
+        r["evidence"] = [text_of[i] for i in r["evidence_ids"]]
     _write(conn, "UPDATE jobs SET grade = ? WHERE id = ?", (json.dumps(result), id))
     return result
 
@@ -202,6 +210,10 @@ def tailor_job(id: int, conn=Depends(get_conn)):
         result = tailor(job["text"], profile)
     except Exception as e:  # LLM call failed; never echo prompt or profile
         raise HTTPException(502, f"LLM call failed: {type(e).__name__}")
+    # This job now owns the editor; drop other runs never saved to the tracker so they don't pile up.
+    # Done here, not in POST /jobs, so grading a new job never deletes the draft being edited.
+    _write(conn, "DELETE FROM jobs WHERE id != ? AND NOT EXISTS"
+                 " (SELECT 1 FROM resume_versions v WHERE v.job_id = jobs.id)", (id,))
     # The editor groups bullets under the role their cited source belongs to.
     role_of = {s["id"]: s["role_id"] for s in profile["bullets"] + profile["stories"]}
     for b in result["bullets"]:

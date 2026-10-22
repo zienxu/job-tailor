@@ -94,7 +94,8 @@ def _migrate_leadership(conn: sqlite3.Connection) -> None:
 def load_profile(conn: sqlite3.Connection, full: bool = False) -> dict:
     """Build the dict tailor() expects. IDs are prefixed PKs, so they stay stable.
     Education never reaches the tailor, so its roles and their bullets/stories are left out.
-    full=True is the fit grade's profile: every role kind (with its kind) plus skills entries."""
+    full=True is the fit grade's profile: every role kind (with its kind) plus skills entries and eligibility facts,
+    which only the grade sees (never the tailor or the resume)."""
     where, r_where = ("", "") if full else (" WHERE kind != 'education'", " WHERE r.kind != 'education'")
     profile = {
         "roles": [
@@ -114,4 +115,6 @@ def load_profile(conn: sqlite3.Connection, full: bool = False) -> dict:
     if full:
         profile["skills"] = [{"id": f"skill_{e['id']}", "label": e["label"], "text": e["text"]} for e in conn.execute(
             "SELECT * FROM entries WHERE section = 'skills' ORDER BY position, id")]
+        profile["facts"] = [{"id": f"fact_{e['id']}", "label": e["label"], "text": e["text"]} for e in conn.execute(
+            "SELECT * FROM entries WHERE section = 'eligibility' ORDER BY position, id")]
     return profile

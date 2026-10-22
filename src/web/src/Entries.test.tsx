@@ -11,6 +11,7 @@ beforeEach(() => vi.resetAllMocks())
 
 test.each([
   ['skills', 'Add skill group', 'Languages', 'Python, TypeScript'],
+  ['eligibility', 'Add fact', 'Work eligibility', 'Singapore Citizen'],
 ] as const)('add a %s entry and save', async (section, add, label, text) => {
   m.listEntries.mockResolvedValue([])
   m.createEntry.mockResolvedValue({ id: 1, section, label, text })

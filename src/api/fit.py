@@ -10,7 +10,9 @@ SYSTEM_PROMPT = (
     "You grade how well a candidate's saved profile fits a job. List the job's requirements; for each give "
     "kind (must or nice), hard_gate (true only for a non-negotiable must-have such as a required degree, "
     "licence, clearance or work authorisation), status (met, partial or missing) judged ONLY from the profile, "
-    "and evidence_ids: the profile ids (role, bullet, story or skill) that show it, exactly as given. "
+    "and evidence_ids: the profile ids (role, bullet, story, skill or fact) that show it, exactly as given. "
+    "Facts are the candidate's own statements about work authorisation, citizenship, availability and "
+    "experience level; use them for such requirements. "
     "Also list 10 to 25 ATS keywords from the job, each tagged must or nice. Respond with JSON only: "
     '{"requirements": [{"text": "...", "kind": "must", "hard_gate": false, "status": "met", '
     '"evidence_ids": ["bullet_1"]}], "keywords": [{"term": "...", "kind": "must"}]}'
@@ -38,7 +40,7 @@ def band(score: float, gated: bool = False) -> str:
 
 def grade(job_text: str, profile: dict) -> dict:
     _, stripped = strip_contacts(profile)
-    known = {x["id"] for k in ("roles", "bullets", "stories", "skills") for x in stripped.get(k, [])}
+    known = {x["id"] for k in ("roles", "bullets", "stories", "skills", "facts") for x in stripped.get(k, [])}
     raw = llm.complete(SYSTEM_PROMPT, json.dumps({"job": job_text, "profile": stripped}))
     parsed = json.loads(raw)
     if not _valid(parsed):

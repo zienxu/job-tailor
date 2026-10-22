@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight, Download, ExternalLink } from 'lucide-react'
 import * as api from '../api'
+import GradeCard from '../components/GradeCard'
 
 const STATUSES: api.Status[] = ['saved', 'applied', 'interview', 'offer', 'rejected']
 // SQLite CURRENT_TIMESTAMP is UTC with no zone marker.
@@ -83,7 +84,7 @@ export default function Tracker() {
               <tr>
                 <th className="w-8 px-2 py-2"><span className="sr-only">Details</span></th>
                 <th className="px-2 py-2 font-medium">#</th>
-                {['Company', 'Role', 'Status', 'Date applied', 'Version sent', 'Link'].map((h) => <th key={h} className="px-2 py-2 font-medium">{h}</th>)}
+                {['Company', 'Role', 'Fit', 'Status', 'Date applied', 'Version sent', 'Link'].map((h) => <th key={h} className="px-2 py-2 font-medium">{h}</th>)}
                 <th className="px-2 py-2"><span className="sr-only">Actions</span></th>
               </tr>
             </thead>
@@ -109,6 +110,7 @@ export default function Tracker() {
                       </td>
                       <td className="px-2 py-2"><input className={cell} aria-label="Company" placeholder={`Job ${row}`} value={j.company} onChange={(e) => edit(j.id, { company: e.target.value })} /></td>
                       <td className="px-2 py-2"><input className={cell} aria-label="Role" value={j.title} onChange={(e) => edit(j.id, { title: e.target.value })} /></td>
+                      <td className="px-2 py-2" data-testid="fit">{j.grade?.band ?? ''}</td>
                       <td className="px-2 py-2">
                         <select className={cell} aria-label="Status" value={j.status} onChange={(e) => setStatus(j, e.target.value as api.Status)}>
                           {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -136,7 +138,7 @@ export default function Tracker() {
                     </tr>
                     {expanded && (
                       <tr id={`job-${j.id}`} className="border-b border-line bg-paper last:border-0">
-                        <td colSpan={9} className="px-4 py-4">
+                        <td colSpan={10} className="px-4 py-4">
                           <div className="grid gap-4 md:grid-cols-2">
                             <label className="label">Notes<textarea className="field" rows={3} value={j.notes} onChange={(e) => edit(j.id, { notes: e.target.value })} /></label>
                             <div>
@@ -154,6 +156,7 @@ export default function Tracker() {
                               </ul>
                             </div>
                           </div>
+                          {j.grade && <div className="mt-4"><GradeCard grade={j.grade} /></div>}
                           <details className="mt-4 text-sm">
                             <summary className="cursor-pointer text-muted">Job text</summary>
                             <p className="mt-2 whitespace-pre-wrap">{j.text}</p>
