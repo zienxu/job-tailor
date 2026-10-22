@@ -14,6 +14,7 @@ from src.api import ats, db, pdf
 from src.api.critic import critique
 from src.api.factcheck import check_bullet
 from src.api.fetch_job import REFUSED, fetch_job
+from src.api.fit import grade
 from src.api.tailor import _sources, tailor
 
 app = FastAPI(title="job-tailor")
@@ -144,13 +145,19 @@ _crud("stories", Item)
 _crud("entries", Entry)
 
 
+def _job(row) -> dict:
+    """A job as the API returns it: the stored grade JSON decoded, None when ungraded."""
+    job = dict(row)
+    return {**job, "grade": json.loads(job["grade"]) if job["grade"] else None}
+
+
 @app.post("/jobs", status_code=201)
 def create_job(body: Job, conn=Depends(get_conn)):
     # Each Tailor run makes a job; drop earlier runs never saved to the tracker so they don't pile up.
     conn.execute("DELETE FROM jobs WHERE NOT EXISTS (SELECT 1 FROM resume_versions v WHERE v.job_id = jobs.id)")
     cur = _write(conn, "INSERT INTO jobs (text, company, title, link) VALUES (?, ?, ?, ?)",
                  (body.text, body.company, body.title, body.link))
-    return _get(conn, "jobs", cur.lastrowid)
+    return _job(_get(conn, "jobs", cur.lastrowid))
 
 
 class FetchReq(BaseModel):
@@ -173,7 +180,18 @@ def fetch_job_link(body: FetchReq):
 
 @app.get("/jobs/{id}")
 def get_job(id: int, conn=Depends(get_conn)):
-    return _get(conn, "jobs", id)
+    return _job(_get(conn, "jobs", id))
+
+
+@app.post("/jobs/{id}/grade")
+def grade_job(id: int, conn=Depends(get_conn)):
+    job = _get(conn, "jobs", id)
+    try:
+        result = grade(job["text"], db.load_profile(conn, full=True))
+    except Exception as e:  # LLM call failed or bad response; store nothing, never echo prompt or profile
+        raise HTTPException(502, f"grade failed: {type(e).__name__}")
+    _write(conn, "UPDATE jobs SET grade = ? WHERE id = ?", (json.dumps(result), id))
+    return result
 
 
 @app.post("/jobs/{id}/tailor")
@@ -322,7 +340,7 @@ def list_jobs(conn=Depends(get_conn)):
     versions = {}
     for v in conn.execute("SELECT id, job_id, created_at FROM resume_versions ORDER BY id"):
         versions.setdefault(v["job_id"], []).append({"id": v["id"], "created_at": v["created_at"]})
-    return [{**dict(j), "versions": versions.get(j["id"], [])}
+    return [{**_job(j), "versions": versions.get(j["id"], [])}
             # Only jobs saved with "Save in tracker"; Tailor also makes a job row, for /check and /preview.
             for j in conn.execute("SELECT * FROM jobs WHERE EXISTS"
                                   " (SELECT 1 FROM resume_versions v WHERE v.job_id = jobs.id) ORDER BY id DESC")]
@@ -350,7 +368,7 @@ def update_job(id: int, body: JobUpdate, conn=Depends(get_conn)):
     fields = body.model_dump(exclude_unset=True)
     if fields:
         _write(conn, f"UPDATE jobs SET {', '.join(c + ' = ?' for c in fields)} WHERE id = ?", [*fields.values(), id])
-    return _get(conn, "jobs", id)
+    return _job(_get(conn, "jobs", id))
 
 
 @app.delete("/jobs/{id}", status_code=204)

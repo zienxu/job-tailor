@@ -68,6 +68,7 @@ def connect() -> sqlite3.Connection:
     for col, ddl in (("status", "TEXT NOT NULL DEFAULT 'saved'"), ("applied_at", "TEXT NOT NULL DEFAULT ''"),
                      ("notes", "TEXT NOT NULL DEFAULT ''"), ("version_id", "INTEGER")):
         _add_column(conn, "jobs", col, ddl)
+    _add_column(conn, "jobs", "grade", "TEXT")  # step 8b fit grade as JSON; NULL = not graded
     _migrate_leadership(conn)
     return conn
 
@@ -90,21 +91,27 @@ def _migrate_leadership(conn: sqlite3.Connection) -> None:
             conn.execute("DELETE FROM entries WHERE id = ?", (e["id"],))
 
 
-def load_profile(conn: sqlite3.Connection) -> dict:
+def load_profile(conn: sqlite3.Connection, full: bool = False) -> dict:
     """Build the dict tailor() expects. IDs are prefixed PKs, so they stay stable.
-    Education never reaches the tailor, so its roles and their bullets/stories are left out."""
-    return {
+    Education never reaches the tailor, so its roles and their bullets/stories are left out.
+    full=True is the fit grade's profile: every role kind (with its kind) plus skills entries."""
+    where, r_where = ("", "") if full else (" WHERE kind != 'education'", " WHERE r.kind != 'education'")
+    profile = {
         "roles": [
-            {"id": f"role_{r['id']}", "company": r["company"], "title": r["title"]}
-            for r in conn.execute("SELECT * FROM roles WHERE kind != 'education' ORDER BY position, id")
+            {"id": f"role_{r['id']}", "company": r["company"], "title": r["title"], **({"kind": r["kind"]} if full else {})}
+            for r in conn.execute(f"SELECT * FROM roles{where} ORDER BY position, id")
         ],
         **{
             table: [
                 {"id": f"{prefix}_{r['id']}", "role_id": f"role_{r['role_id']}", "text": r["text"]}
                 for r in conn.execute(
                     f"SELECT t.* FROM {table} t JOIN roles r ON r.id = t.role_id"
-                    f" WHERE r.kind != 'education' ORDER BY {order}")
+                    f"{r_where} ORDER BY {order}")
             ]
             for table, prefix, order in (("bullets", "bullet", "t.position, t.id"), ("stories", "story", "t.id"))
         },
     }
+    if full:
+        profile["skills"] = [{"id": f"skill_{e['id']}", "label": e["label"], "text": e["text"]} for e in conn.execute(
+            "SELECT * FROM entries WHERE section = 'skills' ORDER BY position, id")]
+    return profile
