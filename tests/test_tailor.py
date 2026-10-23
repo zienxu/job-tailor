@@ -283,3 +283,9 @@ def test_tailor_returns_picked_skills_and_defaults_on_a_bad_response():
         assert tailor(JOB_TEXT, profile)["skills"][0] == "skill_16"
     with patch("src.api.tailor.llm.complete", return_value="not json"):
         assert tailor(JOB_TEXT, profile)["skills"][0] == "skill_1"
+
+
+def test_prompt_asks_for_british_spelling_and_no_semicolons_hyphens_or_final_full_stop():
+    assert "British spelling" in SYSTEM_PROMPT
+    assert "Never use semicolons, colons or hyphens" in SYSTEM_PROMPT
+    assert "do not end a bullet with a full stop" in SYSTEM_PROMPT

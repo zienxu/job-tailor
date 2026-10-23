@@ -20,6 +20,7 @@ SYSTEM_PROMPT = (
     "drawn from a role's own stories, citing the story id; a story bullet summarises the story in one "
     "resume-style sentence of at most 30 words, never copies it. Do not invent facts, numbers, "
     "companies, or titles not present in the cited source. "
+    "Write in British spelling. Never use semicolons, colons or hyphens in a bullet (rephrase instead), and do not end a bullet with a full stop. "
     "Sources may mark bold with **double asterisks**; keep the ** around the same words where they survive in your bullet. "
     "Also pick 12 to 14 skills for the resume's one-line Skills section from the given skill_pool, most relevant "
     "to the job first, as ids exactly as given. Never name a skill that is not in the pool. Match a job term to a "
