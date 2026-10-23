@@ -30,10 +30,13 @@ CREATE TABLE IF NOT EXISTS resume_versions (
 CREATE TABLE IF NOT EXISTS entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT, section TEXT NOT NULL, label TEXT NOT NULL, text TEXT NOT NULL,
     position INTEGER);
+CREATE TABLE IF NOT EXISTS skill_pool (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, grp TEXT NOT NULL, aliases TEXT NOT NULL DEFAULT '',
+    is_default INTEGER NOT NULL DEFAULT 0, demote INTEGER NOT NULL DEFAULT 0, position INTEGER);
 """
 
 
-ORDERED = ("roles", "bullets", "entries")
+ORDERED = ("roles", "bullets", "entries", "skill_pool")
 
 
 def _add_column(conn: sqlite3.Connection, table: str, col: str, ddl: str) -> None:
@@ -70,6 +73,7 @@ def connect() -> sqlite3.Connection:
         _add_column(conn, "jobs", col, ddl)
     _add_column(conn, "jobs", "grade", "TEXT")  # step 8b fit grade as JSON; NULL = not graded
     _migrate_leadership(conn)
+    _migrate_skills(conn)
     return conn
 
 
@@ -88,6 +92,38 @@ def _migrate_leadership(conn: sqlite3.Connection) -> None:
             role_id = conn.execute("INSERT INTO roles (company, title, kind, position) VALUES (?, '', 'leadership', ?)",
                                    (e["label"].rstrip(":"), base + i)).lastrowid  # the old template added the ":"
             conn.execute("INSERT INTO bullets (role_id, text) VALUES (?, ?)", (role_id, e["text"]))
+            conn.execute("DELETE FROM entries WHERE id = ?", (e["id"],))
+
+
+def _split_skills(text: str) -> list[str]:
+    """Comma split that keeps commas inside brackets: "Analysis (t-tests, SHAP), Excel"."""
+    parts, depth, cur = [], 0, ""
+    for ch in text:
+        depth += (ch == "(") - (ch == ")")
+        if ch == "," and depth <= 0:
+            parts.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    return [p.strip() for p in parts + [cur] if p.strip()]
+
+
+GROUPS = {g.lower(): g for g in ("Product", "AI", "Technical")}  # other old labels become Technical
+
+
+def _migrate_skills(conn: sqlite3.Connection) -> None:
+    """Before step 8j skills were label/text entries; each comma-separated item becomes a default pool skill.
+    Same one-transaction pattern as _migrate_leadership."""
+    if not conn.execute("SELECT 1 FROM entries WHERE section = 'skills' LIMIT 1").fetchone():
+        return
+    with conn:
+        conn.execute("BEGIN IMMEDIATE")
+        base = conn.execute("SELECT COALESCE(MAX(position), 0) FROM skill_pool").fetchone()[0]
+        for e in conn.execute("SELECT * FROM entries WHERE section = 'skills' ORDER BY position, id").fetchall():
+            for name in _split_skills(e["text"]):
+                base += 1
+                conn.execute("INSERT INTO skill_pool (name, grp, is_default, position) VALUES (?, ?, 1, ?)",
+                             (name, GROUPS.get(e["label"].strip().rstrip(":").lower(), "Technical"), base))
             conn.execute("DELETE FROM entries WHERE id = ?", (e["id"],))
 
 
@@ -112,9 +148,13 @@ def load_profile(conn: sqlite3.Connection, full: bool = False) -> dict:
             for table, prefix, order in (("bullets", "bullet", "t.position, t.id"), ("stories", "story", "t.id"))
         },
     }
+    pool = [{"id": f"skill_{e['id']}", "name": e["name"], "aliases": e["aliases"],
+             "is_default": bool(e["is_default"]), "demote": bool(e["demote"])}
+            for e in conn.execute("SELECT * FROM skill_pool ORDER BY position, id")]
     if full:
-        profile["skills"] = [{"id": f"skill_{e['id']}", "label": e["label"], "text": e["text"]} for e in conn.execute(
-            "SELECT * FROM entries WHERE section = 'skills' ORDER BY position, id")]
+        profile["skills"] = [{"id": s["id"], "label": "Skill", "text": s["name"]} for s in pool]
         profile["facts"] = [{"id": f"fact_{e['id']}", "label": e["label"], "text": e["text"]} for e in conn.execute(
             "SELECT * FROM entries WHERE section = 'eligibility' ORDER BY position, id")]
+    else:
+        profile["skill_pool"] = pool
     return profile

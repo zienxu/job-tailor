@@ -4,9 +4,12 @@ export type Role = RoleFields & { id: number }
 export type ItemFields = { role_id: number; text: string }
 export type Bullet = ItemFields & { id: number; position: number }
 export type Story = ItemFields & { id: number }
-export type Section = 'leadership' | 'skills' | 'eligibility'
+export type Section = 'leadership' | 'eligibility'
 export type EntryFields = { section: Section; label: string; text: string }
 export type Entry = EntryFields & { id: number }
+export type SkillGroup = 'Product' | 'AI' | 'Technical'
+export type SkillFields = { name: string; grp: SkillGroup; aliases: string; is_default: boolean; demote: boolean }
+export type Skill = SkillFields & { id: number }
 
 export type Status = 'saved' | 'applied' | 'interview' | 'offer' | 'rejected'
 export type JobFields = { company: string; title: string; link: string; status: Status; applied_at: string; notes: string; version_id: number | null }
@@ -22,7 +25,6 @@ export type Critique = {
   readiness?: { verdict: 'ready' | 'needs_work'; reason: string } | null
 }
 export type SectionKey = 'summary' | 'education' | 'experience' | 'leadership' | 'projects' | 'skills'
-export type LabelText = { label: string; text: string }
 export type Education = { school: string; degree: string; date: string; details: string[] }
 export type Row = { name: string; role: string; dates: string; bullets: string[] }
 export type Resume = {
@@ -31,12 +33,12 @@ export type Resume = {
   experience: { company: string; title: string; dates: string; bullets: string[] }[]
   leadership: Row[]
   projects: Row[]
-  skills: LabelText[]
+  skills: string[] // skill names, in print order
   order: SectionKey[]
 }
 export type Draft = {
   name: string; contacts: string[]; summary: string; bullets: DraftBullet[]
-  order?: SectionKey[]; education?: Education[]; skills?: LabelText[]
+  order?: SectionKey[]; education?: Education[]; skills?: string[]
   resume?: Resume // the exact payload sent to /pdf, so the tracker can rebuild it
 }
 export type Suggestion = { section: string; role: string; text: string; words?: number }
@@ -80,6 +82,12 @@ export const updateEntry = (id: number, e: EntryFields) => req<Entry>('PUT', `/e
 export const deleteEntry = (id: number) => req<void>('DELETE', `/entries/${id}`)
 export const swapEntries = (a: number, b: number) => req<void>('POST', `/entries/${a}/swap/${b}`)
 
+export const listSkills = () => req<Skill[]>('GET', '/skill_pool')
+export const createSkill = (s: SkillFields) => req<Skill>('POST', '/skill_pool', s)
+export const updateSkill = (id: number, s: SkillFields) => req<Skill>('PUT', `/skill_pool/${id}`, s)
+export const deleteSkill = (id: number) => req<void>('DELETE', `/skill_pool/${id}`)
+export const swapSkills = (a: number, b: number) => req<void>('POST', `/skill_pool/${a}/swap/${b}`)
+
 export const createJob = (text: string, meta?: JobMeta) => req<Job>('POST', '/jobs', { text, ...meta })
 export const fetchJob = (url: string) => req<JobMeta & { text: string }>('POST', '/jobs/fetch', { url })
 export const gradeJob = (id: number) => req<Grade>('POST', `/jobs/${id}/grade`)
@@ -87,7 +95,7 @@ export const listJobs = () => req<Job[]>('GET', '/jobs')
 export const updateJob = (id: number, j: JobFields) => req<Job>('PUT', `/jobs/${id}`, j)
 export const deleteJob = (id: number) => req<void>('DELETE', `/jobs/${id}`)
 export const versionPdf = async (id: number) => (await send('GET', `/versions/${id}/pdf`)).blob()
-export const tailor = (jobId: number) => req<{ bullets: DraftBullet[] }>('POST', `/jobs/${jobId}/tailor`)
+export const tailor = (jobId: number) => req<{ bullets: DraftBullet[]; skills?: string[] }>('POST', `/jobs/${jobId}/tailor`)
 export const check = (jobId: number, text: string, bullets: DraftBullet[], roles: Record<string, string>) =>
   req<{ ats: Ats; flags: string[][]; role_hits: Record<string, number> }>('POST', `/jobs/${jobId}/check`, { text, bullets, roles })
 export const critique = (jobId: number, bullets: DraftBullet[]) => req<Critique>('POST', `/jobs/${jobId}/critique`, { bullets })

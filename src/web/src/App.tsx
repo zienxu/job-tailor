@@ -3,6 +3,7 @@ import { Award, BadgeCheck, BookOpen, Briefcase, FolderGit2, GraduationCap, List
 import Editor from './pages/Editor'
 import Entries from './pages/Entries'
 import Experience from './pages/Experience'
+import Skills from './pages/Skills'
 import Stories from './pages/Stories'
 import Tracker from './pages/Tracker'
 
@@ -89,7 +90,8 @@ export default function App() {
         {page === 'stories' ? <Stories />
           : page === 'editor' ? <Editor />
           : page === 'tracker' ? <Tracker />
-          : page === 'skills' || page === 'eligibility' ? <Entries key={page} section={page} />
+          : page === 'skills' ? <Skills />
+          : page === 'eligibility' ? <Entries key={page} section={page} />
           : page === 'project' || page === 'education' || page === 'leadership' ? <Experience key={page} kind={page} />
           : <Experience />}
       </main>

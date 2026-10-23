@@ -111,7 +111,7 @@ def test_bad_response_fails_closed_and_stores_nothing(client, raw):
 def test_grade_stored_and_education_and_skills_reach_prompt(client):
     edu = client.post("/roles", json={"company": "NUS", "title": "BComp", "kind": "education"}).json()["id"]
     bid = client.post("/bullets", json={"role_id": edu, "text": "Dean's list"}).json()["id"]
-    sid = client.post("/entries", json={"section": "skills", "label": "Languages", "text": "Python, Go"}).json()["id"]
+    sid = client.post("/skill_pool", json={"name": "Python", "grp": "Technical"}).json()["id"]
     job_id = client.post("/jobs", json={"text": "Need a degree"}).json()["id"]
     captured = {}
 
@@ -122,15 +122,18 @@ def test_grade_stored_and_education_and_skills_reach_prompt(client):
     with patch("src.api.fit.llm.complete", side_effect=fake):
         r = client.post(f"/jobs/{job_id}/grade")
     assert r.status_code == 200, r.text
-    for text in ("NUS", "BComp", "Dean's list", f"bullet_{bid}", "Python, Go", f"skill_{sid}"):
+    for text in ("NUS", "BComp", "Dean's list", f"bullet_{bid}", "Python", f"skill_{sid}"):
         assert text in captured["prompt"]
     assert (r.json()["score"], r.json()["band"]) == (5.0, "Apply")
-    assert [q["evidence"] for q in r.json()["requirements"]] == [["NUS, BComp"], ["Languages: Python, Go"]]
+    assert [q["evidence"] for q in r.json()["requirements"]] == [["NUS, BComp"], ["Skill: Python"]]
     assert client.get(f"/jobs/{job_id}").json()["grade"] == r.json()
     client.post(f"/jobs/{job_id}/versions", json={"content": {"bullets": []}})
     assert client.get("/jobs").json()[0]["grade"] == r.json()
     assert client.put(f"/jobs/{job_id}", json={"notes": "x"}).json()["grade"] == r.json()
     assert client.post("/jobs", json={"text": "New"}).json()["grade"] is None
+    # Evidence is a snapshot: editing the pool later leaves the stored grade unchanged.
+    client.put(f"/skill_pool/{sid}", json={"name": "Python 3", "grp": "AI"})
+    assert client.get(f"/jobs/{job_id}").json()["grade"] == r.json()
 
 
 def test_old_db_without_grade_migrates(client):

@@ -10,7 +10,6 @@ const m = vi.mocked(api)
 beforeEach(() => vi.resetAllMocks())
 
 test.each([
-  ['skills', 'Add skill group', 'Languages', 'Python, TypeScript'],
   ['eligibility', 'Add fact', 'Work eligibility', 'Singapore Citizen'],
 ] as const)('add a %s entry and save', async (section, add, label, text) => {
   m.listEntries.mockResolvedValue([])
@@ -30,10 +29,10 @@ test.each([
 
 test('only entries of this section are listed', async () => {
   m.listEntries.mockResolvedValue([
-    { id: 1, section: 'skills', label: 'Languages', text: 'Python' },
+    { id: 1, section: 'eligibility', label: 'Languages', text: 'Python' },
     { id: 2, section: 'leadership', label: 'President', text: 'Ran the club' },
   ])
-  render(<Entries section="skills" />)
+  render(<Entries section="eligibility" />)
 
   expect(await screen.findByDisplayValue('Languages')).toBeInTheDocument()
   expect(screen.queryByDisplayValue('President')).not.toBeInTheDocument()
@@ -42,9 +41,9 @@ test('only entries of this section are listed', async () => {
 test('an entry needs a label and text', async () => {
   m.listEntries.mockResolvedValue([])
   const user = userEvent.setup()
-  render(<Entries section="skills" />)
+  render(<Entries section="eligibility" />)
 
-  await user.click(screen.getByText('Add skill group'))
+  await user.click(screen.getByText('Add fact'))
   await user.type(screen.getByLabelText('Label'), 'Languages')
   await user.click(screen.getByText('Save'))
 
@@ -52,13 +51,13 @@ test('an entry needs a label and text', async () => {
   expect(m.createEntry).not.toHaveBeenCalled()
 })
 
-test('up/down on a skills entry swaps it with its neighbour', async () => {
+test('up/down on an entry swaps it with its neighbour', async () => {
   m.listEntries.mockResolvedValue([
-    { id: 1, section: 'skills', label: 'Languages', text: 'Python' },
-    { id: 2, section: 'skills', label: 'Tools', text: 'Git' },
+    { id: 1, section: 'eligibility', label: 'Languages', text: 'Python' },
+    { id: 2, section: 'eligibility', label: 'Tools', text: 'Git' },
   ])
   const user = userEvent.setup()
-  render(<Entries section="skills" />)
+  render(<Entries section="eligibility" />)
 
   await screen.findByDisplayValue('Tools')
   expect(screen.getAllByLabelText('Move down')[1]).toBeDisabled()

@@ -1,4 +1,5 @@
 import json
+from contextlib import closing
 from pathlib import Path
 from unittest.mock import patch
 
@@ -198,3 +199,21 @@ def test_tailor_ranks_bullets_by_grade_keywords(seeded):
         out = client.post(f"/jobs/{job_id}/tailor").json()
     included = [b["text"] for b in out["bullets"] if b["included"]]
     assert "Wrote terraform." in included and len(included) == 3
+
+
+def test_tailor_keeps_a_demoted_skill_up_when_a_stored_must_have_names_it(seeded):
+    client, job_id, _, _ = seeded
+    ids = [client.post("/skill_pool", json={"name": n, "grp": "Technical", "demote": n == "SQL"}).json()["id"]
+           for n in ("SQL", "Python", "Go", "Rust", "Java", "Kotlin")]
+    llm_out = json.dumps({"bullets": [], "skills": [f"skill_{i}" for i in ids]})
+
+    def skills():
+        with patch("src.api.tailor.llm.complete", return_value=llm_out):
+            return client.post(f"/jobs/{job_id}/tailor").json()["skills"]
+
+    assert skills().index(f"skill_{ids[0]}") == 5  # ungraded: SQL pushed below slot 5
+    grade = {"requirements": [{"text": "Strong SQL skills", "kind": "must"}], "keywords": [{"term": "go", "kind": "nice"}]}
+    with closing(db.connect()) as conn:
+        conn.execute("UPDATE jobs SET grade = ? WHERE id = ?", (json.dumps(grade), job_id))
+        conn.commit()
+    assert skills()[0] == f"skill_{ids[0]}"

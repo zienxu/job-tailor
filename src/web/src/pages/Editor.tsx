@@ -7,8 +7,8 @@ import ScorePanel from '../components/ScorePanel'
 import BoldTextarea from '../components/BoldTextarea'
 
 type Bullet = api.DraftBullet & { key: number; kept?: boolean; included: boolean }
-// Education and skills are copied as saved, never sent to the LLM; edits here stay in this draft.
-type Extra = { key: string; section: 'education' | 'skills'; label: string; sub: string; date: string; text: string; on: boolean }
+// Education is copied as saved, never sent to the LLM; edits here stay in this draft.
+type Extra = { key: string; section: 'education'; label: string; sub: string; date: string; text: string; on: boolean }
 const DEFAULT_ORDER: api.SectionKey[] = ['summary', 'education', 'experience', 'leadership', 'projects', 'skills']
 const SECTION_NAMES: Record<api.SectionKey, string> = {
   summary: 'Summary', education: 'Education', experience: 'Experience', leadership: 'Leadership', projects: 'Projects', skills: 'Skills',
@@ -26,12 +26,13 @@ const CHIPS = {
   long: { label: 'Story too long: one sentence', Icon: Scissors, cls: 'border-warn/50 bg-warn/10 text-warn' },
 }
 
+const SKILLS_MAX = 14 // keep in step with SKILLS_MAX in tailor.py
 const lines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean)
 
 const dates = (r: api.Role) => [r.start_date, r.end_date].filter(Boolean).join(' - ')
 
 function toResume(name: string, contacts: string, summary: string, roles: api.Role[], bullets: Bullet[],
-  extras: Extra[], order: api.SectionKey[]): api.Resume {
+  extras: Extra[], order: api.SectionKey[], skills: string[]): api.Resume {
   const cited = (kind: api.RoleKind) => roles
     .filter((r) => r.kind === kind)
     .map((r) => ({ r, bullets: bullets.filter((b) => b.included && b.role_id === `role_${r.id}`).map((b) => b.text) }))
@@ -45,7 +46,7 @@ function toResume(name: string, contacts: string, summary: string, roles: api.Ro
     experience: cited('experience').map(({ r, bullets }) => ({ company: r.company, title: r.title, dates: dates(r), bullets })),
     leadership: rows('leadership'),
     projects: rows('project'),
-    skills: on('skills').map((e) => ({ label: e.label, text: e.text })),
+    skills,
     order,
   }
 }
@@ -56,7 +57,7 @@ const atsText = (r: api.Resume) => [
   ...r.education.flatMap((e) => [e.school, e.degree, ...e.details]),
   ...r.experience.flatMap((x) => [x.company, x.title, ...x.bullets]),
   ...[...r.projects, ...r.leadership].flatMap((p) => [p.name, p.role, ...p.bullets]),
-  ...r.skills.flatMap((l) => [l.label, l.text]),
+  ...r.skills,
 ].join('\n')
 
 export default function Editor() {
@@ -75,6 +76,8 @@ export default function Editor() {
   const [summary, setSummary] = useState('')
   const [bullets, setBullets] = useState<Bullet[]>([])
   const [extras, setExtras] = useState<Extra[]>([])
+  const [pool, setPool] = useState<api.Skill[]>([])
+  const [picked, setPicked] = useState<number[]>([]) // pool ids in print order; draft only
   const [order, setOrder] = useState<api.SectionKey[]>(DEFAULT_ORDER)
   const [ats, setAts] = useState<api.Ats | null>(null)
   const [roleHits, setRoleHits] = useState<Record<string, number>>({})
@@ -95,14 +98,15 @@ export default function Editor() {
   const saves = useRef(0) // versions saved for this job; every Tailor run makes a new job
 
   useEffect(() => {
-    Promise.all([api.listRoles(), api.listBullets(), api.listEntries(), api.latestVersion()]).then(([rs, bs, es, v]) => {
+    Promise.all([api.listRoles(), api.listBullets(), api.listSkills(), api.latestVersion()]).then(([rs, bs, sk, v]) => {
       setRoles(rs)
+      setPool(sk)
+      setPicked(sk.filter((s) => s.is_default).map((s) => s.id))
       setExtras([
         ...rs.filter((r) => r.kind === 'education').map((r) => ({
           key: `role_${r.id}`, section: 'education' as const, label: r.company, sub: r.title, date: dates(r), on: true,
           text: bs.filter((b) => b.role_id === r.id).map((b) => b.text).join('\n'),
         })),
-        ...es.filter((e) => e.section === 'skills').map((e) => ({ key: `entry_${e.id}`, section: 'skills' as const, label: e.label, sub: '', date: '', text: e.text, on: true })),
       ])
       if (v) {
         setName(v.content.name ?? '')
@@ -112,7 +116,8 @@ export default function Editor() {
     }).catch((e) => setError(e.message))
   }, [])
 
-  const resume = toResume(name, contacts, summary, roles, bullets, extras, order)
+  const skillNames = picked.flatMap((id) => pool.find((s) => s.id === id)?.name ?? [])
+  const resume = toResume(name, contacts, summary, roles, bullets, extras, order, skillNames)
   // Flags and "kept" are left out, so a re-check result doesn't trigger another re-check.
   const draftKey = JSON.stringify([resume, bullets.map((b) => [b.text, b.source_id])])
 
@@ -207,6 +212,7 @@ export default function Editor() {
       setJobId(job.id)
       saves.current = 0
       setBullets(bs)
+      if (out.skills) setPicked(out.skills.map((id) => Number(id.replace('skill_', ''))))
       setCritic(null)
       runCritic(job.id, bs.filter((b) => b.included))
     } catch (e) {
@@ -254,6 +260,8 @@ export default function Editor() {
   const editBullet = (key: number, patch: Partial<Bullet>) =>
     setBullets((bs) => bs.map((b) => (b.key === key ? { ...b, ...patch } : b)))
   const removeBullet = (key: number) => setBullets((bs) => bs.filter((b) => b.key !== key))
+  const moveSkill = (i: number, d: -1 | 1) =>
+    setPicked((p) => { const q = [...p]; [q[i], q[i + d]] = [q[i + d], q[i]]; return q })
   const editExtra = (key: string, patch: Partial<Extra>) =>
     setExtras((es) => es.map((e) => (e.key === key ? { ...e, ...patch } : e)))
   const move = (i: number, by: number) => setOrder((o) => {
@@ -415,7 +423,7 @@ export default function Editor() {
               ))}
             </ol>
           </div>
-          {(['education', 'skills'] as const).map((sec) => {
+          {(['education'] as const).map((sec) => {
             const items = extras.filter((e) => e.section === sec)
             return items.length > 0 && (
               <div key={sec} className="record">
@@ -429,7 +437,7 @@ export default function Editor() {
                         Include {e.label}{e.sub && ` | ${e.sub}`}
                       </label>
                       <BoldTextarea
-                        aria-label={sec === 'education' ? `${e.label} details` : `${e.label} text`}
+                        aria-label={`${e.label} details`}
                         className="field font-serif leading-relaxed"
                         rows={2}
                         disabled={!e.on}
@@ -442,6 +450,34 @@ export default function Editor() {
               </div>
             )
           })}
+          {pool.length > 0 && (
+            <div className="record">
+              <h2 className="font-serif text-lg font-semibold">Skills</h2>
+              <p className="text-sm text-muted">Picked from your skill pool, printed as one line. Edits here apply to this draft only.</p>
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {picked.flatMap((id, i) => {
+                  const s = pool.find((x) => x.id === id)
+                  return s ? [(
+                    <li key={id} className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-sm">
+                      {s.name}
+                      <button type="button" className="btn btn-quiet px-1" aria-label={`Move ${s.name} earlier`} disabled={i === 0} onClick={() => moveSkill(i, -1)}><ArrowUp aria-hidden size={12} /></button>
+                      <button type="button" className="btn btn-quiet px-1" aria-label={`Move ${s.name} later`} disabled={i === picked.length - 1} onClick={() => moveSkill(i, 1)}><ArrowDown aria-hidden size={12} /></button>
+                      <button type="button" className="btn btn-quiet px-1" aria-label={`Remove ${s.name}`} onClick={() => setPicked((p) => p.filter((x) => x !== id))}><X aria-hidden size={12} /></button>
+                    </li>
+                  )] : []
+                })}
+              </ul>
+              <label className="label mt-3">Add a skill
+                <select className="field" value="" onChange={(e) => e.target.value && setPicked((p) => [...p, Number(e.target.value)])}>
+                  <option value="">Choose from your pool</option>
+                  {pool.filter((s) => !picked.includes(s.id)).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </label>
+              <p role={skillNames.length > SKILLS_MAX ? 'status' : undefined} className={`mt-2 text-sm ${skillNames.length > SKILLS_MAX ? 'font-semibold text-warn' : 'text-muted'}`}>
+                {skillNames.length} of {SKILLS_MAX} skills{skillNames.length > SKILLS_MAX && ': over the cap, the line may wrap past two lines'}
+              </p>
+            </div>
+          )}
           {groups.map((g) => (
             <div key={g.id ?? 'uncited'} className="record">
               <h2 className="font-serif text-lg font-semibold">{g.title}</h2>

@@ -41,7 +41,8 @@
 {% endfor %}
 {% elif s == 'skills' and r.skills %}
 <h2>Skills</h2>
-<ul>{% for k in r.skills %}<li><b>{{ k.label.rstrip(':') }}:</b> {{ k.text | bold }}</li>{% endfor %}</ul>
+{% if r.skills[0] is string %}<p>{{ r.skills | join(' | ') }}</p>
+{% else %}<ul>{% for k in r.skills %}<li><b>{{ k.label.rstrip(':') }}:</b> {{ k.text | bold }}</li>{% endfor %}</ul>{% endif %}
 {% endif %}
 {% endfor %}
 </body>

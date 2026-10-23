@@ -18,12 +18,13 @@ beforeEach(() => {
     { id: 4, company: 'Chess Club', title: 'President', start_date: '', end_date: '', kind: 'leadership' as const },
   ])
   m.listBullets.mockResolvedValue([{ id: 9, role_id: 3, text: 'GPA 4.5', position: 9 }])
-  m.listEntries.mockResolvedValue([
-    { id: 2, section: 'skills', label: 'Languages', text: 'Python' },
+  m.listSkills.mockResolvedValue([
+    { id: 2, name: 'Python', grp: 'Technical', aliases: '', is_default: true, demote: false },
+    { id: 3, name: 'SQL', grp: 'Technical', aliases: '', is_default: false, demote: true },
   ])
   m.latestVersion.mockResolvedValue(null)
   m.createJob.mockResolvedValue({ id: 5, text: 'job', company: '', title: '', link: '', status: 'saved', applied_at: '', notes: '', version_id: null })
-  m.tailor.mockResolvedValue({ bullets: [
+  m.tailor.mockResolvedValue({ skills: ['skill_2'], bullets: [
     { text: 'Cut build time by 40%', source_id: 'bullet_1', role_id: 'role_1', flags: [] },
     { text: 'Led 9 teams', source_id: 'bullet_2', role_id: 'role_1', flags: ['unsupported_fact'] },
     { text: 'Invented claim', source_id: null, role_id: null, flags: ['missing_citation'] },
@@ -37,6 +38,14 @@ beforeEach(() => {
     flags: bullets.map((b) => (!b.source_id ? ['missing_citation'] : b.text.includes('9') ? ['unsupported_fact'] : [])),
   }))
 })
+
+async function tailored2() {
+  const user = userEvent.setup()
+  render(<Editor />)
+  await user.type(screen.getByLabelText('Job text'), 'Need kubernetes')
+  await user.click(screen.getByRole('button', { name: 'Tailor' }))
+  await waitFor(() => expect(m.tailor).toHaveBeenCalled())
+}
 
 async function tailored() {
   const user = userEvent.setup()
@@ -177,17 +186,34 @@ test('moving a section changes the order in the preview request', async () => {
   expect(screen.getByLabelText('Move Summary up')).toBeDisabled()
 })
 
-test('copied sections are pre-filled, and unticking an entry removes it from the resume', async () => {
+test('education is pre-filled, and unticking an entry removes it from the resume', async () => {
   const user = await tailored()
   await waitFor(() => expect(m.preview).toHaveBeenCalled())
   expect(lastPreview().education).toEqual([{ school: 'NUS', degree: 'BComp', date: '2025', details: ['GPA 4.5'] }])
 
-  await user.type(screen.getByLabelText('Languages text'), ', Go')
   await user.click(screen.getByLabelText('Include NUS | BComp'))
   await waitFor(() => expect(lastPreview().education).toEqual([]))
-  expect(lastPreview().skills).toEqual([{ label: 'Languages', text: 'Python, Go' }])
-  expect(m.updateEntry).not.toHaveBeenCalled()
-  expect(m.check.mock.calls.at(-1)![1]).toContain('Python, Go') // ATS sees every included section
+})
+
+test('skills start as the defaults, and chips can be added, moved and removed for this draft', async () => {
+  const user = await tailored()
+  await waitFor(() => expect(lastPreview().skills).toEqual(['Python']))
+
+  await user.selectOptions(screen.getByLabelText('Add a skill'), 'SQL')
+  await waitFor(() => expect(lastPreview().skills).toEqual(['Python', 'SQL']))
+  await user.click(screen.getByLabelText('Move SQL earlier'))
+  await waitFor(() => expect(lastPreview().skills).toEqual(['SQL', 'Python']))
+  await user.click(screen.getByLabelText('Remove SQL'))
+  await waitFor(() => expect(lastPreview().skills).toEqual(['Python']))
+  expect(screen.getByText('1 of 14 skills')).toBeInTheDocument()
+  expect(m.check.mock.calls.at(-1)![1]).toContain('Python') // ATS sees the skills line
+  for (const f of [m.createSkill, m.updateSkill, m.deleteSkill, m.swapSkills]) expect(f).not.toHaveBeenCalled()
+})
+
+test('the tailor result replaces the picked skills', async () => {
+  m.tailor.mockResolvedValue({ bullets: [], skills: ['skill_3', 'skill_2'] })
+  await tailored2()
+  await waitFor(() => expect(lastPreview().skills).toEqual(['SQL', 'Python']))
 })
 
 test('a flagged project bullet shows its flag under its project', async () => {
@@ -446,12 +472,8 @@ test('a low score with a missing hard requirement has no "held" note', async () 
 })
 
 test('eligibility facts never appear in the editor', async () => {
-  m.listEntries.mockResolvedValue([
-    { id: 2, section: 'skills', label: 'Languages', text: 'Python' },
-    { id: 3, section: 'eligibility', label: 'Work eligibility', text: 'Singapore Citizen' },
-  ])
   render(<Editor />)
-  expect(await screen.findByLabelText('Languages text')).toBeInTheDocument()
+  expect(await screen.findByLabelText('Add a skill')).toBeInTheDocument()
   expect(screen.queryByText(/Work eligibility/)).not.toBeInTheDocument()
   expect(screen.queryByDisplayValue('Singapore Citizen')).not.toBeInTheDocument()
 })

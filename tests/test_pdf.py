@@ -190,3 +190,15 @@ def test_markers_do_not_change_pdf_length():
     with pdfplumber.open(io.BytesIO(render_pdf(marked))) as pdf:
         assert len(pdf.pages) == 1
         assert "**" not in pdf.pages[0].extract_text()
+
+
+def test_skill_names_render_as_one_line_and_old_groups_still_render():
+    html = render_html({**RESUME, "skills": ["Python", "A&B", "SQL"]})
+    assert "<p>Python | A&amp;B | SQL</p>" in html and "[Category 1]" not in html
+    assert "<b>[Category 1]:</b>" in render_html(RESUME)  # old saved versions keep label/text groups
+
+
+def test_fourteen_skill_names_stay_on_one_page():
+    names = {**RESUME, "skills": [f"Skill name {i}" for i in range(14)]}
+    with pdfplumber.open(io.BytesIO(render_pdf(names))) as pdf:
+        assert len(pdf.pages) == 1

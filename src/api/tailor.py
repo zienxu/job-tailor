@@ -3,7 +3,8 @@
 Profile shape: {"contacts": {"name", "email", "phone"},
                 "roles": [{"id", "company", "title"}],
                 "bullets": [{"id", "role_id", "text"}],
-                "stories": [{"id", "role_id", "text"}]}
+                "stories": [{"id", "role_id", "text"}],
+                "skill_pool": [{"id", "name", "aliases", "is_default", "demote"}]}
 """
 import json
 
@@ -20,8 +21,14 @@ SYSTEM_PROMPT = (
     "resume-style sentence of at most 30 words, never copies it. Do not invent facts, numbers, "
     "companies, or titles not present in the cited source. "
     "Sources may mark bold with **double asterisks**; keep the ** around the same words where they survive in your bullet. "
-    'Respond with JSON only: {"bullets": [{"text": "...", "source_id": "..."}]}'
+    "Also pick 12 to 14 skills for the resume's one-line Skills section from the given skill_pool, most relevant "
+    "to the job first, as ids exactly as given. Never name a skill that is not in the pool. Match a job term to a "
+    "skill only by its name or its listed aliases. "
+    'Respond with JSON only: {"bullets": [{"text": "...", "source_id": "..."}], "skills": ["skill_1"]}'
 )
+
+SKILLS_MIN, SKILLS_MAX = 12, 14  # shortcut: 14 is a guess for two lines; lower SKILLS_MAX if the PDF wraps further
+DEMOTED_BELOW = 5  # a demoted skill (SQL) stays out of the first five unless the job requires it
 
 
 def strip_contacts(profile: dict) -> tuple[dict, dict]:
@@ -40,7 +47,24 @@ def build_prompt(job_text: str, profile: dict) -> str:
     items = profile.get("bullets", []) + profile.get("stories", [])
     roles = [{**r, "sources": {s["id"]: s["text"] for s in items if s["role_id"] == r["id"]}}
              for r in profile.get("roles", [])]
-    return json.dumps({"job": job_text, "roles": roles})
+    pool = [{"id": p["id"], "name": p["name"], "aliases": p["aliases"]} for p in profile.get("skill_pool", [])]
+    return json.dumps({"job": job_text, "roles": roles, "skill_pool": pool})
+
+
+def pick_skills(ids, pool: list[dict], required: list[str]) -> list[str]:
+    """Order the LLM's picks, dropping unknown ids and dupes, padding from defaults (or all defaults when
+    nothing usable came back), capping, demoting."""
+    by_id = {p["id"]: p for p in pool}
+    picked = list(dict.fromkeys(i for i in (ids if isinstance(ids, list) else []) if isinstance(i, str) and i in by_id))
+    defaults = [p["id"] for p in pool if p["is_default"] and p["id"] not in picked]
+    picked += defaults[:max(0, SKILLS_MIN - len(picked))] if picked else defaults  # no usable picks: every default
+    picked = picked[:SKILLS_MAX]
+    musts = "\n".join(required)  # a posting term matches only a skill's name or one of its listed aliases
+    bad = [i for i in picked[:DEMOTED_BELOW] if by_id[i]["demote"]
+           and not hits([by_id[i]["name"], *by_id[i]["aliases"].split(",")], musts)]
+    rest = [i for i in picked if i not in bad]
+    picked = rest[:DEMOTED_BELOW] + bad + rest[DEMOTED_BELOW:]
+    return picked
 
 
 def _flag_all_missing(sources: dict[str, str]) -> list[dict]:
@@ -50,7 +74,7 @@ def _flag_all_missing(sources: dict[str, str]) -> list[dict]:
     ]
 
 
-def tailor(job_text: str, profile: dict, keywords: list[dict] | None = None) -> dict:
+def tailor(job_text: str, profile: dict, keywords: list[dict] | None = None, required: list[str] = ()) -> dict:
     contacts, stripped = strip_contacts(profile)
     sources = _sources(stripped)
     user_prompt = build_prompt(job_text, stripped)
@@ -63,7 +87,8 @@ def tailor(job_text: str, profile: dict, keywords: list[dict] | None = None) -> 
         if not isinstance(bullets, list):
             raise ValueError("bullets is not a list")
     except Exception:
-        return {"contacts": contacts, "bullets": _flag_all_missing(sources)}
+        return {"contacts": contacts, "bullets": _flag_all_missing(sources),
+                "skills": pick_skills(None, stripped.get("skill_pool", []), list(required))}
 
     out = []
     for b in bullets:
@@ -87,4 +112,6 @@ def tailor(job_text: str, profile: dict, keywords: list[dict] | None = None) -> 
         for i, b in enumerate(uncited):
             out.append({"text": b["text"], "source_id": b["id"], "flags": check_bullet(b["text"], b["id"], sources),
                         "fallback": True, "included": not mine and i == 0})
-    return {"contacts": contacts, "bullets": out}
+    return {"contacts": contacts, "bullets": out,
+            "skills": pick_skills(parsed.get("skills") if isinstance(parsed, dict) else None,
+                                  stripped.get("skill_pool", []), list(required))}

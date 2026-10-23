@@ -107,21 +107,19 @@ def test_role_kind_round_trip(client):
 
 
 def test_entries_crud_round_trip(client):
-    e = client.post("/entries", json={"section": "skills", "label": "Languages", "text": "Python"})
+    e = client.post("/entries", json={"section": "eligibility", "label": "Citizenship", "text": "SG"})
     assert e.status_code == 201
     eid = e.json()["id"]
-    client.post("/entries", json={"section": "skills", "label": "Tools", "text": "Git"})
-    client.put(f"/entries/{eid}", json={"section": "skills", "label": "Languages", "text": "Python, Go"})
+    client.post("/entries", json={"section": "eligibility", "label": "Start", "text": "Now"})
+    client.put(f"/entries/{eid}", json={"section": "eligibility", "label": "Citizenship", "text": "SG, PR"})
     assert [(x["label"], x["text"]) for x in client.get("/entries").json()] == [
-        ("Languages", "Python, Go"), ("Tools", "Git")]
-    # Leadership lives in roles since step 7c2b.
-    assert client.post("/entries", json={"section": "leadership", "label": "P", "text": "x"}).status_code == 422
-    assert client.post("/entries", json={"section": "hobbies", "label": "a", "text": "b"}).status_code == 422
-    assert client.post("/entries", json={"section": "skills", "label": " ", "text": "b"}).status_code == 422
-    # A grade-only eligibility fact can't be moved into skills (which prints on the resume).
-    fact = client.post("/entries", json={"section": "eligibility", "label": "Citizenship", "text": "SG"}).json()["id"]
-    assert client.put(f"/entries/{fact}", json={"section": "skills", "label": "C", "text": "SG"}).status_code == 422
-    assert client.put(f"/entries/{fact}", json={"section": "eligibility", "label": "C", "text": "SG"}).status_code == 200
+        ("Citizenship", "SG, PR"), ("Start", "Now")]
+    # Leadership lives in roles since step 7c2b and skills in skill_pool since 8j.
+    for section in ("leadership", "skills", "hobbies"):
+        assert client.post("/entries", json={"section": section, "label": "P", "text": "x"}).status_code == 422
+    assert client.post("/entries", json={"section": "eligibility", "label": " ", "text": "b"}).status_code == 422
+    # A grade-only eligibility fact can't be moved into another section.
+    assert client.put(f"/entries/{eid}", json={"section": "skills", "label": "C", "text": "SG"}).status_code == 422
     assert client.delete(f"/entries/{eid}").status_code == 204
     assert client.get(f"/entries/{eid}").status_code == 404
 
@@ -152,7 +150,7 @@ def test_old_db_without_kind_migrates(client):
 
 @pytest.mark.parametrize("table,body", [
     ("roles", lambda i: {"company": f"C{i}", "title": "T"}),
-    ("entries", lambda i: {"section": "skills", "label": f"L{i}", "text": "x"}),
+    ("skill_pool", lambda i: {"name": f"S{i}", "grp": ["Technical", "AI", "Product"][i]}),  # groups never block a swap
 ])
 def test_swap_changes_order(client, table, body):
     ids = [client.post(f"/{table}", json=body(i)).json()["id"] for i in range(3)]
@@ -208,14 +206,14 @@ def test_old_leadership_entries_migrate_to_roles(client):
     with closing(db.connect()) as conn:  # an old DB: rows written before connect() learned to move them
         conn.execute("INSERT INTO roles (company, title, kind) VALUES ('Old Club', 'Chair', 'leadership')")
         conn.executemany("INSERT INTO entries (section, label, text, position) VALUES (?, ?, ?, ?)", [
-            ("leadership", "Debate", "Won 3 cups", 20), ("skills", "Languages", "Python", 5),
+            ("leadership", "Debate", "Won 3 cups", 20), ("eligibility", "Citizenship", "SG", 5),
             ("leadership", "Chess Club:", "Led 20 members", 10)])
         conn.commit()
     roles = [r for r in client.get("/roles").json() if r["kind"] == "leadership"]
     assert [(r["company"], r["title"]) for r in roles] == [("Old Club", "Chair"), ("Chess Club", ""), ("Debate", "")]
     by_role = {b["role_id"]: b["text"] for b in client.get("/bullets").json()}
     assert [by_role.get(r["id"]) for r in roles[1:]] == ["Led 20 members", "Won 3 cups"]
-    assert [e["section"] for e in client.get("/entries").json()] == ["skills"]
+    assert [e["section"] for e in client.get("/entries").json()] == ["eligibility"]
 
     snapshot = [client.get(f"/{t}").json() for t in ("roles", "bullets", "entries")]
     with closing(db.connect()):  # second run is a no-op
@@ -232,3 +230,19 @@ def test_load_profile_includes_leadership_excludes_education(client):
         profile = db.load_profile(conn)
     assert [r["id"] for r in profile["roles"]] == [f"role_{ids['leadership']}"]
     assert [b["role_id"] for b in profile["bullets"]] == [f"role_{ids['leadership']}"]
+
+
+def test_old_skills_entries_migrate_to_the_pool_once(client):
+    with closing(db.connect()) as conn:
+        conn.execute("INSERT INTO entries (section, label, text) VALUES ('skills', 'Technical:', 'Python, Analysis (t-tests, SHAP), SQL')")
+        conn.execute("INSERT INTO entries (section, label, text) VALUES ('skills', 'ai', 'RAG')")
+        conn.execute("INSERT INTO entries (section, label, text) VALUES ('skills', 'Languages:', 'Go')")
+        conn.commit()
+    pool = client.get("/skill_pool").json()
+    assert [(s["name"], s["grp"], s["is_default"]) for s in pool] == [
+        ("Python", "Technical", 1), ("Analysis (t-tests, SHAP)", "Technical", 1), ("SQL", "Technical", 1),
+        ("RAG", "AI", 1), ("Go", "Technical", 1)]  # an unknown old label becomes Technical
+    assert client.get("/entries").json() == []
+    with closing(db.connect()):  # second run is a no-op
+        pass
+    assert client.get("/skill_pool").json() == pool

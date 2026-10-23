@@ -14,6 +14,7 @@ beforeEach(() => {
   m.listBullets.mockResolvedValue([])
   m.listStories.mockResolvedValue([])
   m.listEntries.mockResolvedValue([])
+  m.listSkills.mockResolvedValue([])
 })
 
 afterEach(() => vi.restoreAllMocks())

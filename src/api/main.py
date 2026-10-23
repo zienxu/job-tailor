@@ -57,9 +57,17 @@ class Bullet(Item):
 
 
 class Entry(BaseModel):
-    section: Literal["skills", "eligibility"]  # leadership moved to roles in step 7c2b; eligibility is grade-only
+    section: Literal["eligibility"]  # leadership moved to roles in 7c2b and skills to skill_pool in 8j; eligibility is grade-only
     label: NonBlank
     text: NonBlank
+
+
+class Skill(BaseModel):
+    name: NonBlank
+    grp: Literal["Product", "AI", "Technical"]
+    aliases: str = ""  # "also matches" terms, e.g. Agile for Sprint Reviews
+    is_default: bool = False
+    demote: bool = False  # stays out of the first five skills unless the job requires it
 
 
 class Job(BaseModel):
@@ -90,6 +98,7 @@ def _write(conn, sql: str, params) -> sqlite3.Cursor:
 
 
 # Rows only swap within their own list: same role kind, same bullet role, same entry section.
+# Skills swap freely: their group only labels the Skills page.
 GROUP = {"roles": "kind", "bullets": "role_id", "entries": "section"}
 
 
@@ -135,7 +144,7 @@ def _crud(table: str, Model: type[BaseModel]) -> None:
     def swap(a: int, b: int, conn=Depends(get_conn)):
         conn.execute("BEGIN IMMEDIATE")  # take the write lock before reading, so overlapping swaps can't both read old positions
         ra, rb = _get(conn, table, a), _get(conn, table, b)
-        if ra[GROUP[table]] != rb[GROUP[table]]:
+        if table in GROUP and ra[GROUP[table]] != rb[GROUP[table]]:
             raise HTTPException(422, f"{table} {a} and {b} are in different {GROUP[table]}s")
         conn.execute(f"UPDATE {table} SET position = ? WHERE id = ?", (rb["position"], a))
         conn.execute(f"UPDATE {table} SET position = ? WHERE id = ?", (ra["position"], b))
@@ -146,6 +155,7 @@ _crud("roles", Role)
 _crud("bullets", Bullet)
 _crud("stories", Item)
 _crud("entries", Entry)
+_crud("skill_pool", Skill)
 
 
 def _job(row) -> dict:
@@ -190,6 +200,16 @@ def _keywords(job: dict) -> list | None:
     return grade.get("keywords") if isinstance(grade, dict) else None
 
 
+def _musts(job: dict) -> list[str]:
+    """Must-have keyword terms and requirement texts from the stored grade; [] when ungraded (8j demote rule)."""
+    grade = _job(job)["grade"]
+    if not isinstance(grade, dict):
+        return []
+    items = [x for k in ("keywords", "requirements") if isinstance(grade.get(k), list) for x in grade[k]]
+    return [t for x in items if isinstance(x, dict) and x.get("kind") == "must"
+            for t in (x.get("term"), x.get("text")) if isinstance(t, str)]
+
+
 @app.post("/jobs/{id}/grade")
 def grade_job(id: int, conn=Depends(get_conn)):
     job = _get(conn, "jobs", id)
@@ -213,7 +233,7 @@ def tailor_job(id: int, conn=Depends(get_conn)):
     job = _get(conn, "jobs", id)
     profile = db.load_profile(conn)
     try:
-        result = tailor(job["text"], profile, _keywords(job))
+        result = tailor(job["text"], profile, _keywords(job), _musts(job))
     except Exception as e:  # LLM call failed; never echo prompt or profile
         raise HTTPException(502, f"LLM call failed: {type(e).__name__}")
     # This job now owns the editor; drop other runs never saved to the tracker so they don't pile up.
@@ -294,7 +314,7 @@ class Resume(BaseModel):
     experience: list[ExperienceEntry] = []
     leadership: list[ProjectEntry] = []
     projects: list[ProjectEntry] = []
-    skills: list[LabelEntry] = []
+    skills: list[LabelEntry | str] = Field([], max_length=500)  # 8j: skill names; old saved versions hold label/text groups
     order: list[Literal["summary", "education", "experience", "leadership", "projects", "skills"]] = pdf.ORDER
 
 

@@ -240,3 +240,46 @@ def test_prompt_asks_to_keep_bold_markers():
     with patch("src.api.tailor.llm.complete", return_value=mock_response([])) as mock:
         tailor(JOB_TEXT, PROFILE)
     assert "**" in mock.call_args.args[0]
+
+
+def _pool(n=16, flags={}):
+    return [{"id": f"skill_{i}", "name": f"S{i}", "aliases": "", "is_default": i <= 13, "demote": False,
+             **flags.get(i, {})} for i in range(1, n + 1)]
+
+
+def test_pick_skills_drops_unknown_and_dupes_caps_and_pads_from_defaults():
+    from src.api.tailor import pick_skills
+    pool = _pool()
+    assert pick_skills(["skill_16", "nope", "skill_16", "skill_15"], pool, [])[:2] == ["skill_16", "skill_15"]
+    assert len(pick_skills(["skill_16", "nope", "skill_16"], pool, [])) == 12  # padded from defaults to 12
+    assert len(pick_skills([f"skill_{i}" for i in range(1, 17)], pool, [])) == 14  # capped
+    assert pick_skills("junk", pool, []) == [f"skill_{i}" for i in range(1, 14)]  # bad shape = every default
+    assert pick_skills([], _pool(20, {i: {"is_default": True} for i in range(1, 21)}), []) == [
+        f"skill_{i}" for i in range(1, 15)]  # every default, capped
+
+
+def test_demoted_skill_leaves_the_first_five_unless_a_must_have_names_it():
+    from src.api.tailor import pick_skills
+    pool = _pool(16, {2: {"name": "SQL", "aliases": "Postgres, MySQL", "demote": True}})
+    ids = [f"skill_{i}" for i in range(1, 13)]
+    assert pick_skills(ids, pool, []).index("skill_2") == 5  # ungraded job: stays down
+    assert pick_skills(ids, pool, ["Python"]).index("skill_2") == 5
+    assert pick_skills(ids, pool, ["SQL"]).index("skill_2") == 1  # a must keyword
+    assert pick_skills(ids, pool, ["Strong SQL skills for reporting"]).index("skill_2") == 1  # a must requirement
+    assert pick_skills(ids, pool, ["Experience with MySQL"]).index("skill_2") == 1  # a listed alias
+
+
+def test_prompt_carries_pool_ids_names_and_aliases_only():
+    profile = {**PROFILE, "skill_pool": _pool(2, {1: {"aliases": "Postgres"}})}
+    with patch("src.api.tailor.llm.complete", return_value=mock_response([])) as mock:
+        tailor(JOB_TEXT, profile)
+    pool = json.loads(mock.call_args.args[1])["skill_pool"]
+    assert pool == [{"id": "skill_1", "name": "S1", "aliases": "Postgres"}, {"id": "skill_2", "name": "S2", "aliases": ""}]
+
+
+def test_tailor_returns_picked_skills_and_defaults_on_a_bad_response():
+    profile = {**PROFILE, "skill_pool": _pool()}
+    with patch("src.api.tailor.llm.complete", return_value=json.dumps({"bullets": [], "skills": ["skill_16"]})):
+        assert tailor(JOB_TEXT, profile)["skills"][0] == "skill_16"
+    with patch("src.api.tailor.llm.complete", return_value="not json"):
+        assert tailor(JOB_TEXT, profile)["skills"][0] == "skill_1"
