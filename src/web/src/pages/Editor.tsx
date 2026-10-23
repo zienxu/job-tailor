@@ -60,6 +60,11 @@ const atsText = (r: api.Resume) => [
   ...r.skills,
 ].join('\n')
 
+// Which saved summary template the hint's kind pre-selects, matched on the template's label.
+const KIND_LABEL: Record<'pm' | 'technical' | 'graduate', RegExp> = {
+  pm: /\b(a?pm|product)\b/i, technical: /tech|engineer/i, graduate: /grad|programme|program|associate|rotation/i,
+}
+
 export default function Editor() {
   const [roles, setRoles] = useState<api.Role[]>([])
   const [jobText, setJobText] = useState('')
@@ -74,6 +79,15 @@ export default function Editor() {
   const [name, setName] = useState('')
   const [contacts, setContacts] = useState('')
   const [summary, setSummary] = useState('')
+  const [templates, setTemplates] = useState<api.Entry[]>([])
+  const [tplId, setTplId] = useState<number | ''>('')
+  const [hint, setHint] = useState<Partial<api.SummaryHint>>({}) // empty values leave their [placeholder] for the user to type
+  const [hintError, setHintError] = useState('')
+  const lastFill = useRef('') // the last text a template put in the box, to tell a hand edit apart
+  const summaryRef = useRef('') // read by the async hint, which would otherwise see a stale summary
+  summaryRef.current = summary
+  const templatesRef = useRef<api.Entry[]>([]) // Tailor may start before the templates load
+  templatesRef.current = templates
   const [bullets, setBullets] = useState<Bullet[]>([])
   const [extras, setExtras] = useState<Extra[]>([])
   const [pool, setPool] = useState<api.Skill[]>([])
@@ -115,6 +129,33 @@ export default function Editor() {
       }
     }).catch((e) => setError(e.message))
   }, [])
+
+  useEffect(() => {
+    api.listEntries().then((es) => setTemplates(es.filter((e) => e.section === 'summary'))).catch((e) => setError(e.message))
+  }, [])
+
+  function fill(t: api.Entry, h: Partial<api.SummaryHint>) {
+    const text = (['domain', 'company', 'programme'] as const).reduce(
+      (s, k) => (h[k] ? s.replace(new RegExp(`\\[${k}\\]`, 'gi'), () => h[k]!) : s), t.text)
+    const cur = summaryRef.current
+    if (cur.trim() && cur !== lastFill.current && !confirm('Replace your edits to the summary?')) return
+    lastFill.current = text
+    setTplId(t.id)
+    setSummary(text)
+  }
+
+  function suggest(id: number) {
+    setHintError('')
+    setHint({}) // never fill an older job's values
+    api.summaryHint(id).then((h) => {
+      if (jobRef.current !== id) return // a newer Tailor run owns the summary now
+      setHint(h)
+      const t = templatesRef.current.find((x) => KIND_LABEL[h.kind].test(x.label))
+      if (t) fill(t, h)
+    }).catch(() => jobRef.current === id && setHintError('No suggestion; pick a template and fill in the [brackets].'))
+  }
+
+  const hasPlaceholder = /\[[^\]]+\]/.test(summary) // advice only, never blocks download
 
   const skillNames = picked.flatMap((id) => pool.find((s) => s.id === id)?.name ?? [])
   const resume = toResume(name, contacts, summary, roles, bullets, extras, order, skillNames)
@@ -215,6 +256,7 @@ export default function Editor() {
       if (out.skills) setPicked(out.skills.map((id) => Number(id.replace('skill_', ''))))
       setCritic(null)
       runCritic(job.id, bs.filter((b) => b.included))
+      suggest(job.id)
     } catch (e) {
       setError((e as Error).message)
     }
@@ -405,7 +447,21 @@ export default function Editor() {
           <div className="record flex flex-col gap-4">
             <label className="label">Name<input className="field" value={name} onChange={(e) => setName(e.target.value)} /></label>
             <label className="label">Contacts (one per line)<textarea className="field" rows={3} value={contacts} onChange={(e) => setContacts(e.target.value)} /></label>
-            <label className="label">Summary<BoldTextarea className="field font-serif leading-relaxed" rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} /></label>
+            {templates.length > 0 && (
+              <label className="label">Summary template
+                <select className="field" value={tplId} onChange={(e) => {
+                  const t = templates.find((x) => x.id === Number(e.target.value))
+                  if (t) fill(t, hint)
+                }}>
+                  <option value="" disabled>Choose a template</option>
+                  {templates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+                {hintError && <span className="text-sm font-normal text-muted">{hintError}</span>}
+              </label>
+            )}
+            <label className="label">Summary<BoldTextarea className="field font-serif leading-relaxed" rows={3} value={summary} onChange={(e) => setSummary(e.target.value)}
+              aria-describedby={hasPlaceholder ? 'summary-placeholder' : undefined} /></label>
+            {hasPlaceholder && <p id="summary-placeholder" role="status" className="-mt-2 text-sm text-muted">The summary still has a [bracketed] placeholder.</p>}
           </div>
           <div className="record">
             <h2 className="font-serif text-lg font-semibold">Section order</h2>

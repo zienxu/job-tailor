@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Award, BadgeCheck, BookOpen, Briefcase, FolderGit2, GraduationCap, ListChecks, Wrench, PanelLeftClose, PanelLeftOpen, PenLine, type LucideIcon } from 'lucide-react'
+import { Award, BadgeCheck, BookOpen, Briefcase, FileText, FolderGit2, GraduationCap, ListChecks, Wrench, PanelLeftClose, PanelLeftOpen, PenLine, type LucideIcon } from 'lucide-react'
 import Editor from './pages/Editor'
 import Entries from './pages/Entries'
 import Experience from './pages/Experience'
@@ -7,7 +7,7 @@ import Skills from './pages/Skills'
 import Stories from './pages/Stories'
 import Tracker from './pages/Tracker'
 
-type Page = 'experience' | 'project' | 'education' | 'leadership' | 'skills' | 'eligibility' | 'stories' | 'editor' | 'tracker'
+type Page = 'experience' | 'project' | 'education' | 'leadership' | 'skills' | 'summary' | 'eligibility' | 'stories' | 'editor' | 'tracker'
 
 const PAGES: [Page, string, LucideIcon, boolean][] = [
   ['experience', 'Experience', Briefcase, true],
@@ -15,6 +15,7 @@ const PAGES: [Page, string, LucideIcon, boolean][] = [
   ['education', 'Education', GraduationCap, true],
   ['leadership', 'Leadership', Award, true],
   ['skills', 'Skills', Wrench, true],
+  ['summary', 'Summaries', FileText, true],
   ['eligibility', 'Eligibility', BadgeCheck, true],
   ['stories', 'Stories', BookOpen, true],
   ['editor', 'Editor', PenLine, true],
@@ -91,7 +92,7 @@ export default function App() {
           : page === 'editor' ? <Editor />
           : page === 'tracker' ? <Tracker />
           : page === 'skills' ? <Skills />
-          : page === 'eligibility' ? <Entries key={page} section={page} />
+          : page === 'eligibility' || page === 'summary' ? <Entries key={page} section={page} />
           : page === 'project' || page === 'education' || page === 'leadership' ? <Experience key={page} kind={page} />
           : <Experience />}
       </main>

@@ -124,6 +124,46 @@ def test_entries_crud_round_trip(client):
     assert client.get(f"/entries/{eid}").status_code == 404
 
 
+def test_summary_templates_crud_and_kept_out_of_profiles(client):
+    t = client.post("/entries", json={"section": "summary", "label": "PM / APM", "text": "PM role in [domain]."})
+    assert t.status_code == 201
+    client.put(f"/entries/{t.json()['id']}", json={"section": "summary", "label": "PM / APM", "text": "PM in [domain]."})
+    assert [(x["section"], x["text"]) for x in client.get("/entries").json()] == [("summary", "PM in [domain].")]
+    assert client.put(f"/entries/{t.json()['id']}", json={"section": "eligibility", "label": "x", "text": "y"}).status_code == 422
+    with closing(db.connect()) as conn:
+        for full in (False, True):
+            assert "PM in" not in json.dumps(db.load_profile(conn, full=full))
+
+
+@pytest.mark.parametrize("reply,ok", [
+    ('{"kind": "pm", "domain": " digital payments ", "company": "Acme", "programme": "payments app"}', True),
+    ('{"kind": "pm", "domain": "digital payments", "company": "", "programme": ""}', True),  # none in the posting
+    ('{"kind": "designer", "domain": "payments", "company": "", "programme": ""}', False),
+    ('{"kind": "pm", "domain": "one two three four five six seven", "company": "", "programme": ""}', False),
+    ('{"kind": "pm", "company": "", "programme": ""}', False),
+    ('{"kind": "pm", "domain": "digital payments"}', False),  # company and programme keys are required
+    ('{"kind": "pm", "domain": "healthcare", "company": "", "programme": ""}', False),  # not in the posting
+    ('{"kind": "pm", "domain": "payments", "company": "Globex", "programme": ""}', False),  # company not in posting
+    ('{"kind": "pm", "domain": "payments", "company": 5, "programme": ""}', False),
+    ('{"kind": "pm", "domain": "payments", "company": "s", "programme": ""}', False),  # stray letter, not a word
+    ('{"kind": "pm", "domain": "payments", "company": "", "programme": "."}', False),
+    ("not json", False),
+])
+def test_summary_hint(client, reply, ok):
+    role = client.post("/roles", json={"company": "SecretCo", "title": "SWE"}).json()["id"]
+    client.post("/bullets", json={"role_id": role, "text": "Private bullet"})
+    text = "Acme PM for a digital payments app"
+    job = client.post("/jobs", json={"text": text}).json()["id"]
+    with patch("src.api.main.llm.complete", return_value=reply) as mock:
+        r = client.post(f"/jobs/{job}/summary-hint")
+    assert mock.call_args.args[1] == text  # job text only, no profile
+    if ok:
+        assert r.status_code == 200 and r.json()["domain"] == "digital payments"
+        assert r.json()["company"] in ("Acme", "") and set(r.json()) == {"kind", "domain", "company", "programme"}
+    else:
+        assert r.status_code == 502
+
+
 def test_education_excluded_from_profile(client):
     work = client.post("/roles", json={"company": "Acme", "title": "SWE"}).json()["id"]
     proj = client.post("/roles", json={"company": "Chess AI", "title": "Project", "kind": "project"}).json()["id"]

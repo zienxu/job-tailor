@@ -1,5 +1,6 @@
 """FastAPI app. Run: .venv/bin/uvicorn src.api.main:app --env-file .env"""
 import json
+import re
 import sqlite3
 from typing import Annotated, Literal
 from urllib.error import HTTPError
@@ -10,7 +11,7 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, StringConstraints, ValidationError
 
-from src.api import ats, db, pdf
+from src.api import ats, db, llm, pdf
 from src.api.critic import critique
 from src.api.factcheck import check_bullet
 from src.api.fetch_job import REFUSED, fetch_job
@@ -57,7 +58,8 @@ class Bullet(Item):
 
 
 class Entry(BaseModel):
-    section: Literal["eligibility"]  # leadership moved to roles in 7c2b and skills to skill_pool in 8j; eligibility is grade-only
+    # leadership moved to roles in 7c2b and skills to skill_pool in 8j; eligibility is grade-only; summary = 8k templates
+    section: Literal["eligibility", "summary"]
     label: NonBlank
     text: NonBlank
 
@@ -226,6 +228,43 @@ def grade_job(id: int, conn=Depends(get_conn)):
         r["evidence"] = [text_of[i] for i in r["evidence_ids"]]
     _write(conn, "UPDATE jobs SET grade = ? WHERE id = ?", (json.dumps(result), id))
     return result
+
+
+HINT_PROMPT = (
+    "Read the job posting. Give kind: pm for a product management or APM role, technical for an engineering, "
+    "data or other technology role, graduate for a management associate or rotational graduate programme; "
+    "domain: the product area or industry the role works in; company: the employer's name; programme: the "
+    "programme or role name (e.g. Management Associate Programme). Each at most 6 words, copied from the "
+    'posting; use "" for company or programme when the posting has none. Respond with JSON only: '
+    '{"kind": "pm", "domain": "...", "company": "...", "programme": "..."}'
+)
+
+
+def _from_posting(value, text: str, required: bool) -> str:
+    """At most 6 words, each (minus a trailing "s") found in the posting; "" only when not required."""
+    raw = value.split()
+    if not raw and not required:
+        return ""
+    # Word-start match, so "payment" finds "payments" but "s" or "." can't match inside any word.
+    words = [w.strip(".,()").lower().rstrip("s") for w in raw]
+    if not 0 < len(raw) <= 6 or not all(w and re.search(rf"\b{re.escape(w)}", text, re.I) for w in words):
+        raise ValueError("bad hint")
+    return value.strip()
+
+
+@app.post("/jobs/{id}/summary-hint")
+def summary_hint(id: int, conn=Depends(get_conn)):
+    job = _get(conn, "jobs", id)
+    try:  # job text only: no profile or contacts reach this call
+        out = json.loads(llm.complete(HINT_PROMPT, job["text"]))
+        kind = out["kind"]
+        if kind not in ("pm", "technical", "graduate"):
+            raise ValueError("bad hint")
+        domain, company, programme = (_from_posting(out[k], job["text"], k == "domain")
+                                      for k in ("domain", "company", "programme"))
+    except Exception as e:  # fails closed: nothing to fill, never echo the prompt
+        raise HTTPException(502, f"summary hint failed: {type(e).__name__}")
+    return {"kind": kind, "domain": domain, "company": company, "programme": programme}
 
 
 @app.post("/jobs/{id}/tailor")

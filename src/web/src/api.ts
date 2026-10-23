@@ -4,7 +4,7 @@ export type Role = RoleFields & { id: number }
 export type ItemFields = { role_id: number; text: string }
 export type Bullet = ItemFields & { id: number; position: number }
 export type Story = ItemFields & { id: number }
-export type Section = 'leadership' | 'eligibility'
+export type Section = 'leadership' | 'eligibility' | 'summary'
 export type EntryFields = { section: Section; label: string; text: string }
 export type Entry = EntryFields & { id: number }
 export type SkillGroup = 'Product' | 'AI' | 'Technical'
@@ -91,6 +91,8 @@ export const swapSkills = (a: number, b: number) => req<void>('POST', `/skill_po
 export const createJob = (text: string, meta?: JobMeta) => req<Job>('POST', '/jobs', { text, ...meta })
 export const fetchJob = (url: string) => req<JobMeta & { text: string }>('POST', '/jobs/fetch', { url })
 export const gradeJob = (id: number) => req<Grade>('POST', `/jobs/${id}/grade`)
+export type SummaryHint = { kind: 'pm' | 'technical' | 'graduate'; domain: string; company: string; programme: string }
+export const summaryHint = (id: number) => req<SummaryHint>('POST', `/jobs/${id}/summary-hint`)
 export const listJobs = () => req<Job[]>('GET', '/jobs')
 export const updateJob = (id: number, j: JobFields) => req<Job>('PUT', `/jobs/${id}`, j)
 export const deleteJob = (id: number) => req<void>('DELETE', `/jobs/${id}`)

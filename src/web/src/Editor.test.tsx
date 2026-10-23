@@ -23,6 +23,8 @@ beforeEach(() => {
     { id: 3, name: 'SQL', grp: 'Technical', aliases: '', is_default: false, demote: true },
   ])
   m.latestVersion.mockResolvedValue(null)
+  m.listEntries.mockResolvedValue([])
+  m.summaryHint.mockResolvedValue({ kind: 'pm', domain: 'payments', company: 'Acme', programme: 'Associate Programme' })
   m.createJob.mockResolvedValue({ id: 5, text: 'job', company: '', title: '', link: '', status: 'saved', applied_at: '', notes: '', version_id: null })
   m.tailor.mockResolvedValue({ skills: ['skill_2'], bullets: [
     { text: 'Cut build time by 40%', source_id: 'bullet_1', role_id: 'role_1', flags: [] },
@@ -476,4 +478,58 @@ test('eligibility facts never appear in the editor', async () => {
   expect(await screen.findByLabelText('Add a skill')).toBeInTheDocument()
   expect(screen.queryByText(/Work eligibility/)).not.toBeInTheDocument()
   expect(screen.queryByDisplayValue('Singapore Citizen')).not.toBeInTheDocument()
+})
+
+const TEMPLATES = [
+  { id: 1, section: 'summary' as const, label: 'PM / APM roles', text: 'Seeking a PM role in [domain].' },
+  { id: 2, section: 'summary' as const, label: 'Management associate programmes', text: 'Seeking a rotational programme.' },
+]
+
+test('the hint pre-selects a template and fills Summary with the domain substituted', async () => {
+  m.listEntries.mockResolvedValue(TEMPLATES)
+  await tailored()
+  await waitFor(() => expect(screen.getByLabelText('Summary')).toHaveValue('Seeking a PM role in payments.'))
+  expect(screen.getByLabelText('Summary template')).toHaveValue('1')
+})
+
+test('a template without [domain] is used as-is, with no confirm when untouched', async () => {
+  m.listEntries.mockResolvedValue(TEMPLATES)
+  const confirm = vi.spyOn(window, 'confirm')
+  const user = await tailored()
+  await waitFor(() => expect(screen.getByLabelText('Summary')).toHaveValue('Seeking a PM role in payments.'))
+  await user.selectOptions(screen.getByLabelText('Summary template'), '2')
+  expect(screen.getByLabelText('Summary')).toHaveValue('Seeking a rotational programme.')
+  expect(confirm).not.toHaveBeenCalled()
+})
+
+test('switching template after a hand edit asks first, and No keeps the edit', async () => {
+  m.listEntries.mockResolvedValue(TEMPLATES)
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  const user = await tailored()
+  await waitFor(() => expect(screen.getByLabelText('Summary')).toHaveValue('Seeking a PM role in payments.'))
+  await user.type(screen.getByLabelText('Summary'), ' Mine.')
+  await user.selectOptions(screen.getByLabelText('Summary template'), '2')
+  expect(confirm).toHaveBeenCalledOnce()
+  expect(screen.getByLabelText('Summary')).toHaveValue('Seeking a PM role in payments. Mine.')
+  expect(screen.getByLabelText('Summary template')).toHaveValue('1')
+})
+
+test('company and programme are substituted too, and an empty value leaves its placeholder with a warning', async () => {
+  m.listEntries.mockResolvedValue([{ id: 3, section: 'summary' as const, label: 'PM / APM roles', text: "At [Company]'s [programme] in [domain]." }])
+  m.summaryHint.mockResolvedValue({ kind: 'pm', domain: 'payments', company: 'Acme', programme: '' })
+  const user = await tailored()
+  await waitFor(() => expect(screen.getByLabelText('Summary')).toHaveValue("At Acme's [programme] in payments."))
+  expect(screen.getByLabelText('Summary')).toHaveAccessibleDescription(/bracketed/)
+  const box = screen.getByLabelText('Summary')
+  await user.clear(box)
+  await user.type(box, 'All filled in.')
+  expect(screen.queryByText(/bracketed/)).not.toBeInTheDocument()
+})
+
+test('all three placeholders are substituted, and a $ in a value is kept literally', async () => {
+  m.listEntries.mockResolvedValue([{ id: 3, section: 'summary' as const, label: 'Graduate programme', text: "Seeking [Company]'s [Programme] across [domain]." }])
+  m.summaryHint.mockResolvedValue({ kind: 'graduate', domain: 'retail banking', company: 'A$1 Bank', programme: 'Management Associate Programme' })
+  await tailored()
+  await waitFor(() => expect(screen.getByLabelText('Summary')).toHaveValue("Seeking A$1 Bank's Management Associate Programme across retail banking."))
+  expect(screen.queryByText(/bracketed/)).not.toBeInTheDocument()
 })
