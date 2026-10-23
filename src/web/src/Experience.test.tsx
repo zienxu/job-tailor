@@ -189,6 +189,20 @@ test('add a project with its own labels, saved as kind project', async () => {
   expect(m.createRole).toHaveBeenCalledWith({ company: 'Chess AI', title: 'Course Project, NUS', start_date: '', end_date: '', kind: 'project' })
 })
 
+test('a project saves without a subtitle', async () => {
+  m.listRoles.mockResolvedValue([])
+  m.listBullets.mockResolvedValue([])
+  m.createRole.mockResolvedValue({ id: 2, company: 'Chess AI', title: '', start_date: '', end_date: '', kind: 'project' })
+  const user = userEvent.setup()
+  render(<Experience kind="project" />)
+
+  await user.click(screen.getByText('Add project'))
+  await user.type(screen.getByLabelText('Project'), 'Chess AI')
+  await user.click(screen.getByText('Save'))
+
+  await waitFor(() => expect(m.createRole).toHaveBeenCalledWith({ company: 'Chess AI', title: '', start_date: '', end_date: '', kind: 'project' }))
+})
+
 test('a leadership role saves with kind leadership and no position', async () => {
   m.listRoles.mockResolvedValue([])
   m.listBullets.mockResolvedValue([])

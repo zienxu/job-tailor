@@ -50,8 +50,8 @@ export default function Experience({ kind = 'experience' }: { kind?: api.RoleKin
   async function save(i: number) {
     const { id, bullets: text, company, title, start_date, end_date } = forms[i]
     const fields = { company, title, start_date, end_date, kind }
-    // Leadership roles migrated from entries have no position, and an empty one just hides the subtitle line.
-    const needTitle = kind !== 'leadership'
+    // Leadership roles migrated from entries have no position, and an empty one just hides the subtitle line (as for projects).
+    const needTitle = kind !== 'leadership' && kind !== 'project'
     if (!company.trim() || (needTitle && !title.trim()))
       return setError(needTitle ? `${L.company} and ${L.title.toLowerCase()} are required` : `${L.company} is required`)
     setSaving(true)
