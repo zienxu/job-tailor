@@ -257,7 +257,7 @@ class CritiqueReq(BaseModel):
 @app.post("/jobs/{id}/critique")
 def critique_draft(id: int, body: CritiqueReq, conn=Depends(get_conn)):
     job = _get(conn, "jobs", id)
-    return critique(job["text"], {"bullets": [{"text": b.text} for b in body.bullets]})
+    return critique(job["text"], {"bullets": [b.model_dump() for b in body.bullets]}, _sources(db.load_profile(conn)))
 
 
 class ExperienceEntry(BaseModel):

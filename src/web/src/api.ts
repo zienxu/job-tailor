@@ -16,9 +16,9 @@ export type JobMeta = { company: string; title: string; link: string }
 export type Job = JobFields & { id: number; text: string; created_at?: string; versions?: { id: number; created_at: string }[]; grade?: Grade | null }
 export type DraftBullet = { text: string; source_id: string | null; role_id: string | null; flags: string[]; fallback?: boolean; included?: boolean }
 export type Ats = { label: string; score: number; matched: string[]; missing: string[] }
-export type Note = { text: string; reason: string }
+export type CriticItem = { bullet: string; problem: string; fix: string }
 export type Critique = {
-  unmet_must_haves: string[]; weak_bullets: Note[]; missing_keywords: string[]; overstated_claims: Note[]; error?: string
+  items: CriticItem[]; error?: string
   readiness?: { verdict: 'ready' | 'needs_work'; reason: string } | null
 }
 export type SectionKey = 'summary' | 'education' | 'experience' | 'leadership' | 'projects' | 'skills'

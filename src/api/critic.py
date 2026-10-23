@@ -1,44 +1,43 @@
-"""Devil's-advocate critic: a second Groq call that returns suggestions only.
+"""Critic: a second Groq call that returns suggestions only.
 It never edits the resume. Contacts are never sent."""
 import json
 
 from src.api import llm
 
-KEYS = ("unmet_must_haves", "weak_bullets", "missing_keywords", "overstated_claims")
+MAX_ITEMS = 5
 
 SYSTEM_PROMPT = (
-    "You are a skeptical hiring manager reviewing resume bullets against a job. "
-    "Do not rewrite anything; only point out problems. Respond with JSON only: "
-    '{"unmet_must_haves": ["..."], '
-    '"weak_bullets": [{"text": "...", "reason": "..."}], '
-    '"missing_keywords": ["..."], '
-    '"overstated_claims": [{"text": "...", "reason": "..."}], '
+    "You are a supportive hiring manager who wants this candidate shortlisted. "
+    "Review the resume bullets against the job and flag only what would cost them an interview. "
+    "Each bullet comes with its cited source text, the candidate's own saved record; "
+    "a claim the source supports is true, so never call it overstated. "
+    "Do not rewrite the resume; suggest fixes only. "
+    "Return 3 to 5 items ranked by impact, most important first (fewer if that is all there is). "
+    "Respond with JSON only: "
+    '{"items": [{"bullet": "...", "problem": "...", "fix": "..."}], '
     '"readiness": {"verdict": "ready" or "needs_work", "reason": "..."}}. '
     "readiness is your one-line call on whether this resume is ready to send for this job."
 )
 
 
 def _failed(error: str) -> dict:
-    return {**{k: [] for k in KEYS}, "readiness": None, "error": error}
+    return {"items": [], "readiness": None, "error": error}
 
 
-def _valid(parsed: dict) -> bool:
-    def is_note(i):
-        return isinstance(i, dict) and isinstance(i.get("text"), str) and isinstance(i.get("reason"), str)
-
-    readiness = parsed.get("readiness")
+def _valid(items, readiness) -> bool:
     return (
         isinstance(readiness, dict)
         and readiness.get("verdict") in ("ready", "needs_work")
         and isinstance(readiness.get("reason"), str)
-        and all(isinstance(parsed.get(k), list) for k in KEYS)
-        and all(isinstance(i, str) for k in ("unmet_must_haves", "missing_keywords") for i in parsed[k])
-        and all(is_note(i) for k in ("weak_bullets", "overstated_claims") for i in parsed[k])
+        and isinstance(items, list)
+        and all(isinstance(i, dict) and all(isinstance(i.get(k), str) for k in ("bullet", "problem", "fix"))
+                for i in items)
     )
 
 
-def critique(job_text: str, resume: dict) -> dict:
-    bullets = [b["text"] for b in resume.get("bullets", [])]
+def critique(job_text: str, resume: dict, sources: dict[str, str] | None = None) -> dict:
+    sources = sources or {}
+    bullets = [{"text": b["text"], "source": sources.get(b.get("source_id"))} for b in resume.get("bullets", [])]
     user_prompt = json.dumps({"job": job_text, "bullets": bullets})
     try:
         raw = llm.complete(SYSTEM_PROMPT, user_prompt)
@@ -46,9 +45,14 @@ def critique(job_text: str, resume: dict) -> dict:
         return _failed("llm_call_failed")
     try:
         parsed = json.loads(raw)
-        if not _valid(parsed):
+        items, readiness = parsed.get("items"), parsed.get("readiness")
+        if isinstance(items, list):
+            items = items[:MAX_ITEMS]  # ranked, so the first 5 are the top; extras are never inspected
+        if not _valid(items, readiness):
             raise ValueError("critic response has the wrong shape")
     except Exception:
         return _failed("unparseable_response")
-    readiness = {"verdict": parsed["readiness"]["verdict"], "reason": parsed["readiness"]["reason"]}
-    return {**{k: parsed[k] for k in KEYS}, "readiness": readiness}
+    return {
+        "items": [{k: i[k] for k in ("bullet", "problem", "fix")} for i in items],
+        "readiness": {"verdict": readiness["verdict"], "reason": readiness["reason"]},
+    }

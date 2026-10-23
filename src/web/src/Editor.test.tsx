@@ -7,7 +7,7 @@ import Editor from './pages/Editor'
 vi.mock('./api')
 const m = vi.mocked(api)
 
-const emptyCritique = { unmet_must_haves: [], weak_bullets: [], missing_keywords: [], overstated_claims: [] }
+const emptyCritique = { items: [], readiness: null }
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -300,6 +300,19 @@ test('the readiness verdict shows and "needs_work" does not block download', asy
   await user.click(screen.getByLabelText('Keep anyway'))
   await user.click(screen.getByLabelText("I've reviewed this draft"))
   await waitFor(() => expect(screen.getByRole('button', { name: /Download PDF/ })).toBeEnabled())
+})
+
+test('the critic shows its items with problem and fix, and no must-have or keyword lists', async () => {
+  const items = [1, 2, 3, 4, 5].map((n) => ({ bullet: `Bullet ${n} text`, problem: `Problem ${n}`, fix: `Fix ${n}` }))
+  m.critique.mockResolvedValue({ items, readiness: { verdict: 'ready', reason: 'Strong match' } })
+  await tailored()
+  const panel = (await screen.findByText('Problem 5')).closest('section')!
+  expect(within(panel).getAllByRole('listitem')).toHaveLength(5)
+  for (const n of [1, 2, 3, 4, 5]) {
+    expect(within(panel).getByText(`Problem ${n}`)).toBeInTheDocument()
+    expect(within(panel).getByText(`Fix ${n}`)).toBeInTheDocument()
+  }
+  expect(within(panel).queryByText(/must-have|keyword/i)).not.toBeInTheDocument()
 })
 
 const grade = (band: api.Grade['band'] = 'Skip', score = 2.4): api.Grade => ({

@@ -55,13 +55,13 @@ def test_check_returns_per_role_hits(seeded):
 
 
 def test_critique_passes_through(seeded):
-    client, job_id, _, _ = seeded
-    out = json.dumps({"unmet_must_haves": ["kubernetes"], "weak_bullets": [],
-                      "missing_keywords": [], "overstated_claims": [],
-                      "readiness": {"verdict": "needs_work", "reason": "no kubernetes"}})
+    client, job_id, _, bullet = seeded
+    item = {"bullet": "Did caching.", "problem": "vague", "fix": "add the 40%"}
+    out = json.dumps({"items": [item], "readiness": {"verdict": "needs_work", "reason": "no kubernetes"}})
     with patch("src.api.critic.llm.complete", return_value=out) as mock:
-        resp = client.post(f"/jobs/{job_id}/critique", json={"bullets": [{"text": "Did caching."}]})
-    assert resp.json()["unmet_must_haves"] == ["kubernetes"]
+        resp = client.post(f"/jobs/{job_id}/critique", json={"bullets": [{"text": "Did caching.", "source_id": bullet}]})
+    assert resp.json()["items"] == [item]
+    assert "Cut build time by 40% with caching." in mock.call_args.args[1]
     assert resp.json()["readiness"] == {"verdict": "needs_work", "reason": "no kubernetes"}
     assert "Did caching." in mock.call_args.args[1]
 

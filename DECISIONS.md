@@ -210,6 +210,7 @@
 - Rejected: the critic's 200 + `error` key (the UI already handles /tailor's 502s); rejecting responses with fewer than 10 or more than 25 keywords (a good grade would be thrown away over a count).
 - Why: user approved these in planning; the spec fixes the scoring, not these edges.
 - 8b review: the score rounds half-up (3.25 -> 3.3) via Decimal, not Python's half-even round() (3.25 -> 3.2), so a score exactly between two tenths is never pulled down a band; every job route (POST/GET/PUT /jobs, GET /jobs) returns `grade` decoded through one `_job()` helper.
+- 8e build: the critic cuts its items to the first 5 before checking their shape, so a bad 6th+ item never fails a good top 5; `/critique` loads cited source text from the saved profile the same way `/check` does (the request still sends only text + source_id).
 
 ## 2026-10-22 — Step 8c grade UI
 - Chose: a "Grade fit" button (and Fetch on a Greenhouse/Lever link) creates the job and grades it; Tailor reuses that job while the text is unchanged (a new POST /jobs deletes unsaved jobs) and is never gated on the band or a failed grade; POST /jobs/{id}/grade stores each requirement's cited saved text as `evidence`, a snapshot at grade time that Re-grade refreshes; "reopening" a job = the Tracker detail row shows the stored grade (from GET /jobs, no new call) and a Fit column shows the band, blank when ungraded.

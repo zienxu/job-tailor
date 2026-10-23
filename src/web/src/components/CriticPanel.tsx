@@ -1,16 +1,13 @@
 import { RefreshCw } from 'lucide-react'
 import type { Critique } from '../api'
 
-const LISTS = [['unmet_must_haves', 'Unmet must-haves'], ['missing_keywords', 'Missing keywords']] as const
-const NOTES = [['weak_bullets', 'Weak bullets'], ['overstated_claims', 'Overstated claims']] as const
-
 type Props = { critic: Critique | null; loading: boolean; disabled: boolean; onRerun: () => void }
 
 export default function CriticPanel({ critic, loading, disabled, onRerun }: Props) {
   return (
     <section className="record" aria-labelledby="critic-title" aria-busy={loading}>
       <div className="flex items-center justify-between gap-2">
-        <h2 id="critic-title" className="text-sm font-semibold text-muted">Devil's advocate</h2>
+        <h2 id="critic-title" className="text-sm font-semibold text-muted">Critic</h2>
         <button type="button" className="btn btn-secondary" disabled={disabled || loading} onClick={onRerun}>
           <RefreshCw aria-hidden size={16} />Re-run critic
         </button>
@@ -27,18 +24,17 @@ export default function CriticPanel({ critic, loading, disabled, onRerun }: Prop
               <p className="text-muted">{critic.readiness.reason}</p>
             </div>
           )}
-          {LISTS.map(([k, title]) => critic[k].length > 0 && (
-            <div key={k}><h3 className="font-medium">{title}</h3><p className="text-muted">{critic[k].join(', ')}</p></div>
-          ))}
-          {NOTES.map(([k, title]) => critic[k].length > 0 && (
-            <div key={k}>
-              <h3 className="font-medium">{title}</h3>
-              <ul className="mt-1 flex flex-col gap-1">
-                {critic[k].map((n, i) => <li key={i}><span className="font-serif">{n.text}</span> <span className="text-muted">- {n.reason}</span></li>)}
-              </ul>
-            </div>
-          ))}
-          {[...LISTS, ...NOTES].every(([k]) => critic[k].length === 0) && <p className="text-muted">No objections.</p>}
+          {critic.items.length > 0 ? (
+            <ol className="flex list-decimal flex-col gap-2 pl-5">
+              {critic.items.map((it, i) => (
+                <li key={i}>
+                  <p className="font-serif">{it.bullet}</p>
+                  <p><span className="font-medium">Problem:</span> <span className="text-muted">{it.problem}</span></p>
+                  <p><span className="font-medium">Fix:</span> <span className="text-muted">{it.fix}</span></p>
+                </li>
+              ))}
+            </ol>
+          ) : <p className="text-muted">No objections.</p>}
         </div>
       )}
     </section>
