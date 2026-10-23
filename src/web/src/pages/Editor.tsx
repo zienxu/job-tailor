@@ -32,9 +32,9 @@ const lines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean)
 const dates = (r: api.Role) => [r.start_date, r.end_date].filter(Boolean).join(' - ')
 
 function toResume(name: string, contacts: string, summary: string, roles: api.Role[], bullets: Bullet[],
-  extras: Extra[], order: api.SectionKey[], skills: string[]): api.Resume {
+  extras: Extra[], order: api.SectionKey[], skills: string[], off: Set<string>): api.Resume {
   const cited = (kind: api.RoleKind) => roles
-    .filter((r) => r.kind === kind)
+    .filter((r) => r.kind === kind && !off.has(`role_${r.id}`))
     .map((r) => ({ r, bullets: bullets.filter((b) => b.included && b.role_id === `role_${r.id}`).map((b) => b.text) }))
   const on = (section: Extra['section']) => extras.filter((e) => e.on && e.section === section)
   const rows = (kind: api.RoleKind) => cited(kind).map(({ r, bullets }) => ({ name: r.company, role: r.title, dates: dates(r), bullets }))
@@ -89,6 +89,8 @@ export default function Editor() {
   const templatesRef = useRef<api.Entry[]>([]) // Tailor may start before the templates load
   templatesRef.current = templates
   const [bullets, setBullets] = useState<Bullet[]>([])
+  const [off, setOff] = useState<Set<string>>(new Set()) // role_ ids left off the resume; draft only
+  const live = (b: Bullet) => b.included && !off.has(b.role_id)
   const [extras, setExtras] = useState<Extra[]>([])
   const [pool, setPool] = useState<api.Skill[]>([])
   const [picked, setPicked] = useState<number[]>([]) // pool ids in print order; draft only
@@ -98,7 +100,7 @@ export default function Editor() {
   const [critic, setCritic] = useState<api.Critique | null>(null)
   const [criticLoading, setCriticLoading] = useState(false)
   const [html, setHtml] = useState('')
-  const [fit, setFit] = useState<api.Fit>({ pages: 1, shorten: [], remove: [] })
+  const [fit, setFit] = useState<api.Fit>({ pages: 1, shorten: [], remove: [], drop: [] })
   const [reviewed, setReviewed] = useState(false)
   const [busy, setBusy] = useState(false)
   // True from an edit until its fact check returns, so the gate never trusts flags from an older draft.
@@ -158,9 +160,9 @@ export default function Editor() {
   const hasPlaceholder = /\[[^\]]+\]/.test(summary) // advice only, never blocks download
 
   const skillNames = picked.flatMap((id) => pool.find((s) => s.id === id)?.name ?? [])
-  const resume = toResume(name, contacts, summary, roles, bullets, extras, order, skillNames)
+  const resume = toResume(name, contacts, summary, roles, bullets, extras, order, skillNames, off)
   // Flags and "kept" are left out, so a re-check result doesn't trigger another re-check.
-  const draftKey = JSON.stringify([resume, bullets.map((b) => [b.text, b.source_id])])
+  const draftKey = JSON.stringify([resume, [...off], bullets.map((b) => [b.text, b.source_id])])
 
   useEffect(() => { setReviewed(false); setSaved('') }, [draftKey])
 
@@ -169,9 +171,9 @@ export default function Editor() {
     let stale = false
     setChecking(true)
     const t = setTimeout(() => {
-      const fallback = bullets.filter((b) => b.included && b.fallback).map((b) => b.text)
+      const fallback = bullets.filter((b) => live(b) && b.fallback).map((b) => b.text)
       // Per-role job-term hits over what each role puts on the page, like atsText.
-      const roleText = Object.fromEntries(roles.filter((r) => r.kind !== 'education').map((r) => [`role_${r.id}`,
+      const roleText = Object.fromEntries(roles.filter((r) => r.kind !== 'education' && !off.has(`role_${r.id}`)).map((r) => [`role_${r.id}`,
         [r.company, r.title, ...bullets.filter((b) => b.included && b.role_id === `role_${r.id}`).map((b) => b.text)].join('\n')]))
       // Both must return before the gate opens: flags and page count must come from this draft.
       Promise.all([api.check(jobId, atsText(resume), bullets, roleText), api.preview(resume, jobId, fallback)]).then(([r, p]) => {
@@ -253,6 +255,7 @@ export default function Editor() {
       setJobId(job.id)
       saves.current = 0
       setBullets(bs)
+      setOff(new Set())
       if (out.skills) setPicked(out.skills.map((id) => Number(id.replace('skill_', ''))))
       setCritic(null)
       runCritic(job.id, bs.filter((b) => b.included))
@@ -301,6 +304,10 @@ export default function Editor() {
 
   const editBullet = (key: number, patch: Partial<Bullet>) =>
     setBullets((bs) => bs.map((b) => (b.key === key ? { ...b, ...patch } : b)))
+  const toggleRole = (id: string) => setOff((o) => { const n = new Set(o); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const KIND = { experience: 'experience', projects: 'project', leadership: 'leadership' } as const
+  const roleId = (section: string, index: number) => // index = position in the resume's list for that section
+    roles.filter((r) => r.kind === KIND[section as keyof typeof KIND] && !off.has(`role_${r.id}`))[index]?.id
   const removeBullet = (key: number) => setBullets((bs) => bs.filter((b) => b.key !== key))
   const moveSkill = (i: number, d: -1 | 1) =>
     setPicked((p) => { const q = [...p]; [q[i], q[i + d]] = [q[i + d], q[i]]; return q })
@@ -312,7 +319,7 @@ export default function Editor() {
     return next
   })
 
-  const unresolved = bullets.filter((b) => b.included && b.flags.length > 0 && !b.kept).length
+  const unresolved = bullets.filter((b) => live(b) && b.flags.length > 0 && !b.kept).length
   const canSend = jobId !== null && unresolved === 0 && reviewed && !checking && !busy && fit.pages <= 1
   const clip = (t: string) => (t.length > 60 ? `${t.slice(0, 60)}...` : t)
 
@@ -416,7 +423,7 @@ export default function Editor() {
           </div>
           <div className="sm:grid sm:grid-cols-[9rem_1fr] sm:gap-x-4">
             <dt>Preview (right)</dt>
-            <dd>The PDF as it will print. If it runs over 1 page, it lists what to shorten or remove.</dd>
+            <dd>The PDF as it will print. If it runs over 1 page, it lists what to shorten or remove, and roles you can drop.</dd>
           </div>
         </dl>
       </header>
@@ -538,6 +545,12 @@ export default function Editor() {
             <div key={g.id ?? 'uncited'} className="record">
               <h2 className="font-serif text-lg font-semibold">{g.title}</h2>
               {g.dates && <p className="text-sm text-muted">{g.dates}</p>}
+              {g.id !== null && (
+                <label className="inline-flex items-center gap-2 text-sm font-medium">
+                  <input type="checkbox" checked={!off.has(g.id)} onChange={() => toggleRole(g.id)} />
+                  Include {g.title}
+                </label>
+              )}
               {g.id !== null && g.id in roleHits && (
                 <p className="text-sm text-muted" title="local estimate">{roleHits[g.id]} job term{roleHits[g.id] === 1 ? '' : 's'}</p>
               )}
@@ -565,6 +578,17 @@ export default function Editor() {
                       {fit.remove.slice(0, 5).map((s, i) => <li key={i}>{s.role}: {clip(s.text.replaceAll('**', ''))}</li>)}
                     </ul>
                   </>)}
+                  {fit.drop.length > 0 && (<>
+                    <p className="mt-2 font-medium">Or drop a whole role</p>
+                    <ul className="list-disc pl-5">
+                      {fit.drop.slice(0, 3).map((d) => {
+                        const id = roleId(d.section, d.index)
+                        return id !== undefined && (
+                          <li key={`${d.section}${d.index}`}>{d.role} <button type="button" className="btn btn-quiet px-2" onClick={() => toggleRole(`role_${id}`)}>Drop</button></li>
+                        )
+                      })}
+                    </ul>
+                  </>)}
                 </div>
               )}
               <label className="inline-flex items-center gap-2 text-sm font-medium">
@@ -585,7 +609,7 @@ export default function Editor() {
         </div>
         <aside className="flex min-w-0 flex-col gap-5">
           <ScorePanel ats={ats} />
-          <CriticPanel critic={critic} loading={criticLoading} disabled={jobId === null} onRerun={() => jobId !== null && runCritic(jobId, bullets.filter((b) => b.included))} />
+          <CriticPanel critic={critic} loading={criticLoading} disabled={jobId === null} onRerun={() => jobId !== null && runCritic(jobId, bullets.filter(live))} />
           {html && (
             <div className="flex flex-col gap-2">
               <button type="button" className="btn btn-secondary self-end" onClick={() => fullRef.current?.showModal()}>

@@ -42,7 +42,7 @@ export type Draft = {
   resume?: Resume // the exact payload sent to /pdf, so the tracker can rebuild it
 }
 export type Suggestion = { section: string; role: string; text: string; words?: number }
-export type Fit = { pages: number; shorten: Suggestion[]; remove: Suggestion[] }
+export type Fit = { pages: number; shorten: Suggestion[]; remove: Suggestion[]; drop: { section: string; role: string; index: number }[] }
 export type Version = { id: number; job_id: number; content: Draft; created_at: string }
 
 async function send(method: string, path: string, body?: unknown): Promise<Response> {

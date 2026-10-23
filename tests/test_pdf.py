@@ -7,7 +7,7 @@ import pdfplumber
 import pytest
 from playwright.sync_api import Error as PlaywrightError
 
-from src.api.pdf import link, page_fit, removal, render_html, render_pdf
+from src.api.pdf import drop_roles, link, page_fit, removal, render_html, render_pdf
 
 ROOT = Path(__file__).parent.parent
 REFERENCE = ROOT / "docs" / "layout-reference.pdf"
@@ -141,10 +141,11 @@ def test_overflow_reports_two_pages_and_shortens_fewest_last_line_words_first():
     assert fit["shorten"][0]["text"] == LONG + " for all of our customers"
     # One-line bullets can't save a line by trimming, so they are never listed.
     assert not any(s["text"].startswith("Shipped") for s in fit["shorten"])
+    assert fit["drop"] and fit["drop"] == drop_roles(over, [])  # present only when over 1 page
 
 
 def test_one_page_has_no_suggestions():
-    assert page_fit(RESUME, render_pdf(RESUME), set(), []) == {"pages": 1, "shorten": [], "remove": []}
+    assert page_fit(RESUME, render_pdf(RESUME), set(), []) == {"pages": 1, "shorten": [], "remove": [], "drop": []}
 
 
 def test_removal_order_fallback_first_bottom_role_first_then_fewest_hits():
@@ -158,6 +159,16 @@ def test_removal_order_fallback_first_bottom_role_first_then_fewest_hits():
         ("Tailor", "python"), ("Acme", "python go docker")]
     assert all(u["text"] for u in out)  # never a header
 
+
+
+def test_drop_roles_fewest_hits_first_bottom_first_on_tie_and_never_a_lone_role():
+    resume = {"order": ["experience", "projects"],
+              "experience": [{"company": "Acme", "title": "Dev", "bullets": ["python go"]},
+                             {"company": "Beta", "title": "Dev", "bullets": ["misc"]}],
+              "projects": [{"name": "Tailor", "role": "", "bullets": ["misc"]}]}
+    out = drop_roles(resume, ["python", "go"])
+    assert [(d["role"], d["index"]) for d in out] == [("Tailor", 0), ("Beta", 1), ("Acme", 0)]
+    assert drop_roles({"order": ["experience"], "experience": resume["experience"][:1]}, ["python"]) == []
 
 
 def test_bold_marks_up_after_escaping():

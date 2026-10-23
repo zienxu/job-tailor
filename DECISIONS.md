@@ -259,3 +259,7 @@
 - Chose: the 8k hint also returns company and programme (each at most 6 words, every word found in the posting, "" allowed when the posting has none); choosing a template fills [domain], [company] and [programme] (case-insensitive); an empty value leaves its placeholder, and the Editor warns under the Summary box while any [bracket] remains, advice only.
 - Rejected: typing them by hand each time (easy to forget, and the brackets would print on the PDF); the tracker's company/title fields (blank unless the job came from a link); blocking download on a leftover bracket (the band and critic are advice too, and a real "[" in a summary is possible).
 - 8l review: posting words match at a word start (so "payment" finds "payments", but a stray "s" or "." no longer passes); the placeholder note is a polite role="status" linked to the Summary box by aria-describedby and worded as advice, not a requirement.
+
+## 2026-10-23 — Step 8m drop a whole role
+- Chose: a per-role Include checkbox kept as draft state (a set of role ids), and an app-logic drop list in /preview (fewest job-term hits first, bottom role on a tie) with a one-click Drop button, shown only when over 1 page.
+- Rejected: an LLM relevance judge (extra Groq call, nothing to test deterministically); always flagging low-relevance roles (user chose overflow only); deleting the role on the Experience page (loses saved data); unticking its bullets (leaves the header on the page).

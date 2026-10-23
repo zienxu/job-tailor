@@ -32,7 +32,7 @@ beforeEach(() => {
     { text: 'Invented claim', source_id: null, role_id: null, flags: ['missing_citation'] },
   ] })
   m.critique.mockResolvedValue(emptyCritique)
-  m.preview.mockResolvedValue({ html: '<p>preview</p>', pages: 1, shorten: [], remove: [] })
+  m.preview.mockResolvedValue({ html: '<p>preview</p>', pages: 1, shorten: [], remove: [], drop: [] })
   // Stand-in for the backend: "kubernetes" is the one missing keyword, and "9" contradicts the source.
   m.check.mockImplementation(async (_id, text, bullets, roles) => ({
     ats: { label: 'local estimate', score: text.includes('kubernetes') ? 100 : 50, matched: [], missing: [] },
@@ -276,6 +276,15 @@ test('an unticked flagged bullet does not block the review gate', async () => {
   await waitFor(() => expect(download).toBeEnabled())
 })
 
+test('an unticked role with a flagged bullet does not block the review gate', async () => {
+  const user = await tailored()
+  const download = screen.getByRole('button', { name: /Download PDF/ })
+  await user.click(screen.getByLabelText('Include Acme - Engineer'))
+  await user.click(screen.getByLabelText('Include bullet 3'))
+  await user.click(screen.getByLabelText("I've reviewed this draft"))
+  await waitFor(() => expect(download).toBeEnabled())
+})
+
 test('only included bullets reach leadership rows and the "Copied as saved" note', async () => {
   m.tailor.mockResolvedValue({ bullets: [
     { text: 'Led 20 members', source_id: 'bullet_7', role_id: 'role_4', flags: [], fallback: true, included: true },
@@ -295,6 +304,7 @@ test('over 1 page blocks download and shows shorten then remove suggestions', as
     html: '<p>preview</p>', pages: 2,
     shorten: [{ section: 'experience', role: 'Acme', text: 'Cut build time by 40%', words: 1 }],
     remove: [{ section: 'leadership', role: 'Chess Club', text: 'Led 20 members' }],
+    drop: [{ section: 'experience', role: 'Acme', index: 0 }],
   })
   const user = await tailored()
   await user.click(screen.getByLabelText('Remove bullet 3'))
@@ -305,6 +315,11 @@ test('over 1 page blocks download and shows shorten then remove suggestions', as
   expect(screen.getByText('Chess Club: Led 20 members')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /Download PDF/ })).toBeDisabled()
   expect(screen.getByLabelText('Bullet 1')).toHaveValue('Cut build time by 40%') // never auto-edits
+  expect(screen.getByLabelText('Include Acme - Engineer')).toBeChecked() // a drop suggestion never auto-applies
+  await user.click(screen.getByRole('button', { name: 'Drop' }))
+  expect(screen.getByLabelText('Include Acme - Engineer')).not.toBeChecked()
+  expect(screen.getByLabelText('Bullet 1')).toBeInTheDocument() // the card stays visible
+  await waitFor(() => expect(m.preview).toHaveBeenLastCalledWith(expect.objectContaining({ experience: [] }), expect.anything(), expect.anything()))
 })
 
 test('each role card shows its job-term hits, leadership included', async () => {

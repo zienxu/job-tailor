@@ -117,9 +117,9 @@ def page_fit(resume: dict, pdf_bytes: bytes, fallback: set[str], terms: list[str
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         pages = len(pdf.pages)
         if pages <= 1:
-            return {"pages": pages, "shorten": [], "remove": []}
+            return {"pages": pages, "shorten": [], "remove": [], "drop": []}
         shorten = _shorten(resume, pdf)
-    return {"pages": pages, "shorten": shorten, "remove": removal(resume, fallback, terms)}
+    return {"pages": pages, "shorten": shorten, "remove": removal(resume, fallback, terms), "drop": drop_roles(resume, terms)}
 
 
 def removal(resume: dict, fallback: set[str], terms: list[str]) -> list[dict]:
@@ -127,3 +127,16 @@ def removal(resume: dict, fallback: set[str], terms: list[str]) -> list[dict]:
     bottom_up = [{"section": s, "role": role, "text": b} for s, role, r in _rows(resume) for b in r["bullets"]][::-1]
     return ([u for u in bottom_up if u["text"] in fallback]
             + sorted((u for u in bottom_up if u["text"] not in fallback), key=lambda u: hits(terms, u["text"])))
+
+
+def drop_roles(resume: dict, terms: list[str]) -> list[dict]:
+    """Whole roles, fewest job-term hits first (bottom role first on a tie). Only worth it with 2+ roles."""
+    rows = list(_rows(resume))
+    if len(rows) < 2:
+        return []
+    seen: dict[str, int] = {}
+    scored = []
+    for i, (s, role, r) in enumerate(rows):
+        seen[s] = seen.get(s, -1) + 1  # position within its section, so two roles with one name stay apart
+        scored.append((hits(terms, " ".join([role, r.get("title") or r.get("role") or "", *r["bullets"]])), -i, s, role, seen[s]))
+    return [{"section": s, "role": role, "index": n} for _, _, s, role, n in sorted(scored)]
