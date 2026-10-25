@@ -72,6 +72,7 @@ def connect() -> sqlite3.Connection:
                      ("notes", "TEXT NOT NULL DEFAULT ''"), ("version_id", "INTEGER")):
         _add_column(conn, "jobs", col, ddl)
     _add_column(conn, "jobs", "grade", "TEXT")  # step 8b fit grade as JSON; NULL = not graded
+    _add_column(conn, "resume_versions", "pdf", "BLOB")  # step 8n uploaded PDF bytes; NULL = rebuilt from content
     _migrate_leadership(conn)
     _migrate_skills(conn)
     return conn

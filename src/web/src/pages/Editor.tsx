@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Download, Gauge, Link, Maximize2, Save, Scissors, Sparkles, TriangleAlert, Unlink, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Download, Gauge, Link, Maximize2, Save, Scissors, Sparkles, TriangleAlert, Unlink, Upload, X } from 'lucide-react'
 import * as api from '../api'
 import CriticPanel from '../components/CriticPanel'
 import GradeCard from '../components/GradeCard'
@@ -111,6 +111,7 @@ export default function Editor() {
   const fullRef = useRef<HTMLDialogElement>(null)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState('') // which tracker row and version the last save went to
+  const [uploaded, setUploaded] = useState('') // where the last uploaded PDF went
   const saves = useRef(0) // versions saved for this job; every Tailor run makes a new job
 
   useEffect(() => {
@@ -260,6 +261,24 @@ export default function Editor() {
       setCritic(null)
       runCritic(job.id, bs.filter((b) => b.included))
       suggest(job.id)
+    } catch (e) {
+      setError((e as Error).message)
+    }
+    setBusy(false)
+  }
+
+  // Step 8n: a PDF tailored outside the app becomes a tracker version of the graded job (appended, never replaced).
+  async function uploadPdf(file: File) {
+    if (!jobText.trim()) return setError('Paste the job text first')
+    setBusy(true)
+    setError('')
+    setUploaded('')
+    try {
+      const job = graded.current?.text === jobText ? graded.current : await api.createJob(jobText, meta)
+      graded.current = { id: job.id, text: jobText }
+      await api.uploadVersion(job.id, file)
+      const jobs = await api.listJobs()
+      setUploaded(`Uploaded ${file.name} to row ${jobs.length - jobs.findIndex((j) => j.id === job.id)} in the tracker`)
     } catch (e) {
       setError((e as Error).message)
     }
@@ -446,7 +465,13 @@ export default function Editor() {
               <button type="button" className="btn btn-primary" disabled={busy} onClick={runTailor}>
                 <Sparkles aria-hidden size={16} />{busy && jobId === null ? 'Tailoring...' : 'Tailor'}
               </button>
+              <label className="btn btn-secondary cursor-pointer">
+                <Upload aria-hidden size={16} />Upload tailored PDF
+                <input type="file" accept="application/pdf" className="sr-only" disabled={busy}
+                  onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadPdf(f) }} />
+              </label>
             </div>
+            {uploaded && <p className="mt-2 text-sm text-muted" role="status">{uploaded}</p>}
           </div>
           {(grade || grading || gradeError) && (
             <GradeCard grade={grade} loading={grading} error={gradeError} onRegrade={() => runGrade()} />

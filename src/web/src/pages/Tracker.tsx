@@ -185,6 +185,7 @@ export default function Tracker() {
                                 {versions.map((v) => (
                                   <li key={v.id} className="flex items-center gap-3 text-sm">
                                     <span>{vName(v.id)} · {when(v.created_at)}</span>
+                                    {v.uploaded && <span className="rounded border border-line px-1.5 text-xs text-muted">uploaded</span>}
                                     {v.id === j.version_id && <span className="rounded border border-accent/50 px-1.5 text-xs text-accent">sent</span>}
                                     <button type="button" className="btn btn-secondary ml-auto px-2 py-1" aria-label={`Download ${vName(v.id)} PDF`} onClick={() => download(v.id)}>
                                       <Download aria-hidden size={14} />PDF

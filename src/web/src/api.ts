@@ -16,7 +16,7 @@ export type JobFields = { company: string; title: string; link: string; status: 
 export type Requirement = { text: string; kind: 'must' | 'nice'; hard_gate: boolean; status: 'met' | 'partial' | 'missing'; evidence_ids: string[]; evidence: string[] }
 export type Grade = { score: number; band: 'Apply' | 'Stretch' | 'Skip'; requirements: Requirement[]; keywords: { term: string; kind: 'must' | 'nice' }[]; seniority_fit?: 'under' | 'match' | 'over'; summary?: string }
 export type JobMeta = { company: string; title: string; link: string }
-export type Job = JobFields & { id: number; text: string; created_at?: string; versions?: { id: number; created_at: string }[]; grade?: Grade | null }
+export type Job = JobFields & { id: number; text: string; created_at?: string; versions?: { id: number; created_at: string; uploaded?: boolean }[]; grade?: Grade | null }
 export type DraftBullet = { text: string; source_id: string | null; role_id: string | null; flags: string[]; fallback?: boolean; included?: boolean }
 export type Ats = { label: string; score: number; matched: string[]; missing: string[] }
 export type CriticItem = { bullet: string; problem: string; fix: string }
@@ -43,7 +43,7 @@ export type Draft = {
 }
 export type Suggestion = { section: string; role: string; text: string; words?: number }
 export type Fit = { pages: number; shorten: Suggestion[]; remove: Suggestion[]; drop: { section: string; role: string; index: number }[] }
-export type Version = { id: number; job_id: number; content: Draft; created_at: string }
+export type Version = { id: number; job_id: number; content: Draft; created_at: string; uploaded?: boolean }
 
 async function send(method: string, path: string, body?: unknown): Promise<Response> {
   const res = await fetch('/api' + path, {
@@ -106,3 +106,10 @@ export const preview = (resume: Resume, jobId: number, fallback: string[]) =>
 export const pdf = async (resume: Resume) => (await send('POST', '/pdf', { resume })).blob()
 export const saveVersion = (jobId: number, content: Draft) => req<Version>('POST', `/jobs/${jobId}/versions`, { content })
 export const latestVersion = () => req<Version | null>('GET', '/versions/latest')
+export async function uploadVersion(jobId: number, file: File) {
+  const body = new FormData()
+  body.append('file', file)
+  const res = await fetch(`/api/jobs/${jobId}/versions/upload`, { method: 'POST', body }) // no JSON header: the browser sets the boundary
+  if (!res.ok) throw new Error((await res.json().catch(() => null))?.detail ?? `Upload failed (${res.status})`)
+  return (await res.json()) as Version
+}

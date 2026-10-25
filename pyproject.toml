@@ -12,6 +12,7 @@ dependencies = [
     "playwright",
     "pdfplumber",
     "snowballstemmer",
+    "python-multipart",
 ]
 
 [project.optional-dependencies]

@@ -5,7 +5,7 @@ import sqlite3
 from typing import Annotated, Literal
 from urllib.error import HTTPError
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -378,7 +378,26 @@ def download_pdf(body: Render):  # plain def: render_pdf uses sync Playwright
 
 
 def _version(row) -> dict:
-    return {**dict(row), "content": json.loads(row["content"])}
+    v = {**dict(row), "content": json.loads(row["content"])}
+    v["uploaded"] = bool(v.pop("pdf"))  # bytes or a 0/1 flag; the bytes only leave through /versions/{id}/pdf
+    return v
+
+
+MAX_UPLOAD = 5 * 1024 * 1024  # step 8n
+VERSION_COLS = "id, job_id, content, created_at, pdf IS NOT NULL AS pdf"  # never load the blob for lists
+
+
+@app.post("/jobs/{id}/versions/upload", status_code=201)
+async def upload_version(id: int, file: UploadFile = File(...), conn=Depends(get_conn)):
+    _get(conn, "jobs", id)
+    data = await file.read(MAX_UPLOAD + 1)  # caps what is stored; Starlette has already spooled the body (localhost only)
+    if len(data) > MAX_UPLOAD:
+        raise HTTPException(413, "PDF is over 5 MB")
+    if not data.startswith(b"%PDF"):
+        raise HTTPException(422, "not a PDF file")
+    cur = _write(conn, "INSERT INTO resume_versions (job_id, content, pdf) VALUES (?, ?, ?)",
+                 (id, json.dumps({"uploaded": True, "filename": (file.filename or "")[:200]}), data))
+    return _version(conn.execute(f"SELECT {VERSION_COLS} FROM resume_versions WHERE id = ?", (cur.lastrowid,)).fetchone())
 
 
 @app.post("/jobs/{id}/versions", status_code=201)
@@ -386,25 +405,29 @@ def save_version(id: int, body: Version, conn=Depends(get_conn)):
     _get(conn, "jobs", id)
     cur = _write(conn, "INSERT INTO resume_versions (job_id, content) VALUES (?, ?)",
                  (id, json.dumps(body.content)))
-    return _version(conn.execute("SELECT * FROM resume_versions WHERE id = ?", (cur.lastrowid,)).fetchone())
+    return _version(conn.execute(f"SELECT {VERSION_COLS} FROM resume_versions WHERE id = ?", (cur.lastrowid,)).fetchone())
 
 
 @app.get("/jobs/{id}/versions")
 def list_versions(id: int, conn=Depends(get_conn)):
     _get(conn, "jobs", id)
     return [_version(r) for r in conn.execute(
-        "SELECT * FROM resume_versions WHERE job_id = ? ORDER BY id", (id,))]
+        f"SELECT {VERSION_COLS} FROM resume_versions WHERE job_id = ? ORDER BY id", (id,))]
 
 
 @app.get("/versions/latest")
 def latest_version(conn=Depends(get_conn)):
-    row = conn.execute("SELECT * FROM resume_versions ORDER BY id DESC LIMIT 1").fetchone()
+    # Uploads have no draft to reload into the Editor.
+    row = conn.execute(f"SELECT {VERSION_COLS} FROM resume_versions WHERE pdf IS NULL ORDER BY id DESC LIMIT 1").fetchone()
     return _version(row) if row else None
 
 
 @app.get("/versions/{id}/pdf")
 def version_pdf(id: int, conn=Depends(get_conn)):  # plain def: render_pdf uses sync Playwright
-    content = json.loads(_get(conn, "resume_versions", id)["content"])
+    row = _get(conn, "resume_versions", id)
+    if row["pdf"] is not None:
+        return Response(row["pdf"], media_type="application/pdf")
+    content = json.loads(row["content"])
     if "resume" not in content:  # versions saved before step 8 stored only the draft
         raise HTTPException(409, "saved before the tracker, can't rebuild")
     try:  # stored JSON was never validated on save
@@ -417,8 +440,9 @@ def version_pdf(id: int, conn=Depends(get_conn)):  # plain def: render_pdf uses 
 @app.get("/jobs")
 def list_jobs(conn=Depends(get_conn)):
     versions = {}
-    for v in conn.execute("SELECT id, job_id, created_at FROM resume_versions ORDER BY id"):
-        versions.setdefault(v["job_id"], []).append({"id": v["id"], "created_at": v["created_at"]})
+    for v in conn.execute("SELECT id, job_id, created_at, pdf IS NOT NULL AS uploaded FROM resume_versions ORDER BY id"):
+        versions.setdefault(v["job_id"], []).append(
+            {"id": v["id"], "created_at": v["created_at"], "uploaded": bool(v["uploaded"])})
     return [{**_job(j), "versions": versions.get(j["id"], [])}
             # Only jobs saved with "Save in tracker"; Tailor also makes a job row, for /check and /preview.
             for j in conn.execute("SELECT * FROM jobs WHERE EXISTS"

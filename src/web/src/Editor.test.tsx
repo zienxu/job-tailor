@@ -548,3 +548,16 @@ test('all three placeholders are substituted, and a $ in a value is kept literal
   await waitFor(() => expect(screen.getByLabelText('Summary')).toHaveValue("Seeking A$1 Bank's Management Associate Programme across retail banking."))
   expect(screen.queryByText(/bracketed/)).not.toBeInTheDocument()
 })
+
+test('uploading a tailored PDF posts it to the job and says which row', async () => {
+  m.uploadVersion.mockResolvedValue({ id: 3, job_id: 5, content: {} as api.Draft, created_at: '', uploaded: true })
+  m.listJobs.mockResolvedValue([{ id: 5, text: 'job', company: '', title: '', link: '', status: 'saved', applied_at: '', notes: '', version_id: null }])
+  const user = userEvent.setup()
+  render(<Editor />)
+  await user.type(screen.getByLabelText('Job text'), 'Need kubernetes')
+  const file = new File(['%PDF-1.4'], 'cv.pdf', { type: 'application/pdf' })
+  await user.upload(screen.getByLabelText('Upload tailored PDF'), file)
+
+  await waitFor(() => expect(m.uploadVersion).toHaveBeenCalledWith(5, file))
+  expect(await screen.findByText('Uploaded cv.pdf to row 1 in the tracker')).toBeInTheDocument()
+})

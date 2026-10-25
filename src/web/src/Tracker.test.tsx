@@ -106,3 +106,15 @@ test('interview prep lists cited stories and bullets by coverage, then the gaps'
   await user.click(screen.getByRole('button', { name: 'Details for Plain' }))
   expect(screen.queryByRole('region', { name: 'Interview prep' })).not.toBeInTheDocument()
 })
+
+test('an uploaded version is marked and downloads through the same button', async () => {
+  m.listJobs.mockResolvedValue([job({ versions: [{ id: 7, created_at: '2026-10-20 10:00:00', uploaded: true }] })])
+  m.versionPdf.mockResolvedValue(new Blob(['%PDF']))
+  const user = userEvent.setup()
+  render(<Tracker />)
+
+  await user.click(await screen.findByRole('button', { name: 'Details for Acme' }))
+  expect(screen.getByText('uploaded')).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Download v1 PDF' }))
+  await waitFor(() => expect(m.versionPdf).toHaveBeenCalledWith(7))
+})

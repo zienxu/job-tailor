@@ -124,3 +124,55 @@ def test_tailor_drops_other_unsaved_jobs(client):
     assert client.get(f"/jobs/{unsaved}").status_code == 404
     assert client.get(f"/jobs/{kept}").status_code == 200
     assert client.get(f"/jobs/{latest}").status_code == 200
+
+
+PDF = b"%PDF-1.4\n" + bytes(range(256)) + b"\n%%EOF"
+
+
+def _upload(client, job_id, data=PDF, name="cv.pdf"):
+    return client.post(f"/jobs/{job_id}/versions/upload", files={"file": (name, data, "application/pdf")})
+
+
+def test_upload_adds_version_and_downloads_identical_bytes(client):
+    job_id = _job(client)
+    r = _upload(client, job_id)
+    assert r.status_code == 201, r.text
+    assert r.json()["uploaded"] is True and "pdf" not in r.json()
+    assert client.get(f"/versions/{r.json()['id']}/pdf").content == PDF
+    [job] = client.get("/jobs").json()
+    assert [v["uploaded"] for v in job["versions"]] == [True]
+
+
+def test_upload_appends_and_keeps_grade(client):
+    job_id = _job(client)
+    sqlite3.connect(db.DB_PATH).execute("UPDATE jobs SET grade = '{}' WHERE id = ?", (job_id,)).connection.commit()
+    a, b = _upload(client, job_id).json()["id"], _upload(client, job_id).json()["id"]
+    assert b > a
+    assert client.get(f"/jobs/{job_id}").json()["grade"] == {}
+
+
+def test_upload_rejects_non_pdf_oversize_and_missing_job(client):
+    job_id = _job(client)
+    assert _upload(client, job_id, b"hello").status_code == 422
+    assert _upload(client, job_id, b"%PDF" + b"0" * (5 * 1024 * 1024)).status_code == 413
+    assert _upload(client, 999).status_code == 404
+    assert client.get("/jobs").json() == []  # nothing was saved
+
+
+def test_old_version_without_pdf_still_rebuilds_and_latest_skips_uploads(client):
+    job_id = _job(client)
+    v = _version(client, job_id)
+    _upload(client, job_id)
+    assert client.get(f"/versions/{v}/pdf").status_code == 409  # still the rebuild path
+    assert client.get("/versions/latest").json()["id"] == v
+
+
+def test_old_versions_table_gets_pdf_column(client):
+    old = sqlite3.connect(db.DB_PATH)
+    old.execute("CREATE TABLE jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, text TEXT NOT NULL)")
+    old.execute("INSERT INTO jobs (text) VALUES ('old job')")
+    old.execute("CREATE TABLE resume_versions (id INTEGER PRIMARY KEY AUTOINCREMENT, job_id INTEGER NOT NULL,"
+                " content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+    old.commit()
+    old.close()
+    assert _upload(client, 1).status_code == 201
