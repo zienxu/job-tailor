@@ -561,3 +561,17 @@ test('uploading a tailored PDF posts it to the job and says which row', async ()
   await waitFor(() => expect(m.uploadVersion).toHaveBeenCalledWith(5, file))
   expect(await screen.findByText('Uploaded cv.pdf to row 1 in the tracker')).toBeInTheDocument()
 })
+
+test('uploading a cover letter posts it to the job and says which row', async () => {
+  m.uploadCoverLetter.mockResolvedValue({ id: 2, filename: 'cl.pdf', created_at: '' })
+  m.listJobs.mockResolvedValue([{ id: 5, text: 'job', company: '', title: '', link: '', status: 'saved', applied_at: '', notes: '', version_id: null }])
+  const user = userEvent.setup()
+  render(<Editor />)
+  await user.type(screen.getByLabelText('Job text'), 'Need kubernetes')
+  const file = new File(['%PDF-1.4'], 'cl.pdf', { type: 'application/pdf' })
+  await user.upload(screen.getByLabelText('Upload cover letter'), file)
+
+  await waitFor(() => expect(m.uploadCoverLetter).toHaveBeenCalledWith(5, file))
+  expect(m.uploadVersion).not.toHaveBeenCalled()
+  expect(await screen.findByText('Uploaded cl.pdf to row 1 in the tracker')).toBeInTheDocument()
+})

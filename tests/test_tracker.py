@@ -176,3 +176,36 @@ def test_old_versions_table_gets_pdf_column(client):
     old.commit()
     old.close()
     assert _upload(client, 1).status_code == 201
+
+
+def _letter(client, job_id, data=PDF, name="cl.pdf"):
+    return client.post(f"/jobs/{job_id}/cover-letters", files={"file": (name, data, "application/pdf")})
+
+
+def test_cover_letter_round_trips_lists_and_appends(client):
+    job_id = _job(client)  # no resume version: the letter alone puts the job in the tracker
+    a, b = _letter(client, job_id), _letter(client, job_id)
+    assert a.status_code == 201 and "pdf" not in a.json()
+    assert client.get(f"/cover-letters/{a.json()['id']}/pdf").content == PDF
+    [job] = client.get("/jobs").json()
+    assert [c["id"] for c in job["cover_letters"]] == [a.json()["id"], b.json()["id"]]
+    assert job["versions"] == [] and "pdf" not in job["cover_letters"][0]
+
+
+def test_cover_letter_rejects_bad_files_and_cascades(client):
+    job_id = _job(client)
+    assert _letter(client, job_id, b"hello").status_code == 422
+    assert _letter(client, job_id, b"%PDF" + b"0" * (5 * 1024 * 1024)).status_code == 413
+    assert _letter(client, 999).status_code == 404
+    assert client.get("/jobs").json() == []
+    cid = _letter(client, job_id).json()["id"]
+    client.delete(f"/jobs/{job_id}")
+    assert client.get(f"/cover-letters/{cid}/pdf").status_code == 404
+
+
+def test_tailor_keeps_job_with_only_a_cover_letter(client):
+    kept, other = _job(client), _job(client)
+    _letter(client, kept)
+    with patch("src.api.main.tailor", return_value={"bullets": [], "skills": [], "summary": ""}):
+        client.post(f"/jobs/{other}/tailor")
+    assert client.get(f"/jobs/{kept}").status_code == 200

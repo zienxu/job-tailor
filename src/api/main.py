@@ -278,7 +278,8 @@ def tailor_job(id: int, conn=Depends(get_conn)):
     # This job now owns the editor; drop other runs never saved to the tracker so they don't pile up.
     # Done here, not in POST /jobs, so grading a new job never deletes the draft being edited.
     _write(conn, "DELETE FROM jobs WHERE id != ? AND NOT EXISTS"
-                 " (SELECT 1 FROM resume_versions v WHERE v.job_id = jobs.id)", (id,))
+                 " (SELECT 1 FROM resume_versions v WHERE v.job_id = jobs.id)"
+                 " AND NOT EXISTS (SELECT 1 FROM cover_letters c WHERE c.job_id = jobs.id)", (id,))
     # The editor groups bullets under the role their cited source belongs to.
     role_of = {s["id"]: s["role_id"] for s in profile["bullets"] + profile["stories"]}
     for b in result["bullets"]:
@@ -387,14 +388,33 @@ MAX_UPLOAD = 5 * 1024 * 1024  # step 8n
 VERSION_COLS = "id, job_id, content, created_at, pdf IS NOT NULL AS pdf"  # never load the blob for lists
 
 
-@app.post("/jobs/{id}/versions/upload", status_code=201)
-async def upload_version(id: int, file: UploadFile = File(...), conn=Depends(get_conn)):
+async def _read_pdf(conn, id: int, file: UploadFile) -> bytes:
     _get(conn, "jobs", id)
     data = await file.read(MAX_UPLOAD + 1)  # caps what is stored; Starlette has already spooled the body (localhost only)
     if len(data) > MAX_UPLOAD:
         raise HTTPException(413, "PDF is over 5 MB")
     if not data.startswith(b"%PDF"):
         raise HTTPException(422, "not a PDF file")
+    return data
+
+
+@app.post("/jobs/{id}/cover-letters", status_code=201)  # step 8o
+async def upload_cover_letter(id: int, file: UploadFile = File(...), conn=Depends(get_conn)):
+    data = await _read_pdf(conn, id, file)
+    cur = _write(conn, "INSERT INTO cover_letters (job_id, filename, pdf) VALUES (?, ?, ?)",
+                 (id, (file.filename or "")[:200], data))
+    return dict(conn.execute("SELECT id, job_id, filename, created_at FROM cover_letters WHERE id = ?",
+                             (cur.lastrowid,)).fetchone())
+
+
+@app.get("/cover-letters/{id}/pdf")
+def cover_letter_pdf(id: int, conn=Depends(get_conn)):
+    return Response(_get(conn, "cover_letters", id)["pdf"], media_type="application/pdf")
+
+
+@app.post("/jobs/{id}/versions/upload", status_code=201)
+async def upload_version(id: int, file: UploadFile = File(...), conn=Depends(get_conn)):
+    data = await _read_pdf(conn, id, file)
     cur = _write(conn, "INSERT INTO resume_versions (job_id, content, pdf) VALUES (?, ?, ?)",
                  (id, json.dumps({"uploaded": True, "filename": (file.filename or "")[:200]}), data))
     return _version(conn.execute(f"SELECT {VERSION_COLS} FROM resume_versions WHERE id = ?", (cur.lastrowid,)).fetchone())
@@ -443,10 +463,13 @@ def list_jobs(conn=Depends(get_conn)):
     for v in conn.execute("SELECT id, job_id, created_at, pdf IS NOT NULL AS uploaded FROM resume_versions ORDER BY id"):
         versions.setdefault(v["job_id"], []).append(
             {"id": v["id"], "created_at": v["created_at"], "uploaded": bool(v["uploaded"])})
-    return [{**_job(j), "versions": versions.get(j["id"], [])}
-            # Only jobs saved with "Save in tracker"; Tailor also makes a job row, for /check and /preview.
-            for j in conn.execute("SELECT * FROM jobs WHERE EXISTS"
-                                  " (SELECT 1 FROM resume_versions v WHERE v.job_id = jobs.id) ORDER BY id DESC")]
+    letters = {}
+    for c in conn.execute("SELECT id, job_id, filename, created_at FROM cover_letters ORDER BY id"):
+        letters.setdefault(c["job_id"], []).append(dict(c))
+    return [{**_job(j), "versions": versions.get(j["id"], []), "cover_letters": letters.get(j["id"], [])}
+            # Only jobs saved with "Save in tracker" or given a cover letter; Tailor also makes a job row, for /check and /preview.
+            for j in conn.execute("SELECT * FROM jobs WHERE EXISTS (SELECT 1 FROM resume_versions v WHERE v.job_id = jobs.id)"
+                                  " OR EXISTS (SELECT 1 FROM cover_letters c WHERE c.job_id = jobs.id) ORDER BY id DESC")]
 
 
 class JobUpdate(BaseModel):

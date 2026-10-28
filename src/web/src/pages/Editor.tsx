@@ -267,8 +267,8 @@ export default function Editor() {
     setBusy(false)
   }
 
-  // Step 8n: a PDF tailored outside the app becomes a tracker version of the graded job (appended, never replaced).
-  async function uploadPdf(file: File) {
+  // Steps 8n and 8o: a PDF made outside the app becomes a tracker version (or cover letter) of the graded job, appended never replaced.
+  async function uploadPdf(file: File, kind: 'resume' | 'cover letter') {
     if (!jobText.trim()) return setError('Paste the job text first')
     setBusy(true)
     setError('')
@@ -276,7 +276,7 @@ export default function Editor() {
     try {
       const job = graded.current?.text === jobText ? graded.current : await api.createJob(jobText, meta)
       graded.current = { id: job.id, text: jobText }
-      await api.uploadVersion(job.id, file)
+      await (kind === 'resume' ? api.uploadVersion(job.id, file) : api.uploadCoverLetter(job.id, file))
       const jobs = await api.listJobs()
       setUploaded(`Uploaded ${file.name} to row ${jobs.length - jobs.findIndex((j) => j.id === job.id)} in the tracker`)
     } catch (e) {
@@ -468,7 +468,12 @@ export default function Editor() {
               <label className="btn btn-secondary cursor-pointer">
                 <Upload aria-hidden size={16} />Upload tailored PDF
                 <input type="file" accept="application/pdf" className="sr-only" disabled={busy}
-                  onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadPdf(f) }} />
+                  onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadPdf(f, 'resume') }} />
+              </label>
+              <label className="btn btn-secondary cursor-pointer">
+                <Upload aria-hidden size={16} />Upload cover letter
+                <input type="file" accept="application/pdf" className="sr-only" disabled={busy}
+                  onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadPdf(f, 'cover letter') }} />
               </label>
             </div>
             {uploaded && <p className="mt-2 text-sm text-muted" role="status">{uploaded}</p>}

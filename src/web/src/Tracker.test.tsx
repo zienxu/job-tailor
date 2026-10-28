@@ -118,3 +118,15 @@ test('an uploaded version is marked and downloads through the same button', asyn
   await user.click(screen.getByRole('button', { name: 'Download v1 PDF' }))
   await waitFor(() => expect(m.versionPdf).toHaveBeenCalledWith(7))
 })
+
+test('a cover letter is listed and downloads through its own endpoint', async () => {
+  m.listJobs.mockResolvedValue([job({ cover_letters: [{ id: 4, filename: 'cl.pdf', created_at: '2026-10-20 10:00:00' }] })])
+  m.coverLetterPdf.mockResolvedValue(new Blob(['%PDF']))
+  const user = userEvent.setup()
+  render(<Tracker />)
+
+  await user.click(await screen.findByRole('button', { name: 'Details for Acme' }))
+  await user.click(screen.getByRole('button', { name: 'Download cover letter cl.pdf' }))
+  await waitFor(() => expect(m.coverLetterPdf).toHaveBeenCalledWith(4))
+  expect(m.versionPdf).not.toHaveBeenCalled()
+})

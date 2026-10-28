@@ -81,7 +81,7 @@ export default function Tracker() {
   }
 
   async function remove(j: api.Job) {
-    if (!confirm(`Delete this job and its ${j.versions?.length ?? 0} saved versions?`)) return
+    if (!confirm(`Delete this job and its ${j.versions?.length ?? 0} saved versions and ${j.cover_letters?.length ?? 0} cover letters?`)) return
     try {
       await api.deleteJob(j.id)
       setJobs((js) => js.filter((x) => x.id !== j.id))
@@ -90,13 +90,13 @@ export default function Tracker() {
     }
   }
 
-  async function download(id: number) {
+  async function download(id: number, name = 'resume.pdf', get = api.versionPdf) {
     setError('')
     try {
-      const url = URL.createObjectURL(await api.versionPdf(id))
+      const url = URL.createObjectURL(await get(id))
       const a = document.createElement('a')
       a.href = url
-      a.download = 'resume.pdf'
+      a.download = name
       a.click()
       setTimeout(() => URL.revokeObjectURL(url), 0) // revoking during click() can cancel the download
     } catch (e) {
@@ -193,6 +193,21 @@ export default function Tracker() {
                                   </li>
                                 ))}
                               </ul>
+                              {!!j.cover_letters?.length && (
+                                <>
+                                  <p className="mt-3 text-sm font-medium text-muted">Cover letters</p>
+                                  <ul className="mt-1 flex flex-col gap-1">
+                                    {j.cover_letters.map((c) => (
+                                      <li key={c.id} className="flex items-center gap-3 text-sm">
+                                        <span>{c.filename || 'cover letter'} · {when(c.created_at)}</span>
+                                        <button type="button" className="btn btn-secondary ml-auto px-2 py-1" aria-label={`Download cover letter ${c.filename || c.id}`} onClick={() => download(c.id, c.filename || 'cover-letter.pdf', api.coverLetterPdf)}>
+                                          <Download aria-hidden size={14} />PDF
+                                        </button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </>
+                              )}
                             </div>
                           </div>
                           {j.grade && <div className="mt-4"><GradeCard grade={j.grade} /></div>}
