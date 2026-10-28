@@ -90,7 +90,7 @@ export default function Editor() {
   templatesRef.current = templates
   const [bullets, setBullets] = useState<Bullet[]>([])
   const [off, setOff] = useState<Set<string>>(new Set()) // role_ ids left off the resume; draft only
-  const live = (b: Bullet) => b.included && !off.has(b.role_id)
+  const live = (b: Bullet) => b.included && !(b.role_id && off.has(b.role_id))
   const [extras, setExtras] = useState<Extra[]>([])
   const [pool, setPool] = useState<api.Skill[]>([])
   const [picked, setPicked] = useState<number[]>([]) // pool ids in print order; draft only
